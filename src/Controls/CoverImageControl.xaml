@@ -22,11 +22,29 @@
              Themes wanting different sizing keep this control hidden and bind
              CoverData.ImagePath, rendering it with their own element - which is
              the integration pattern Aniki's author describes. -->
+        <!-- The OUTGOING cover, underneath, for the crossfade.
+             One Image cannot dissolve into another: assigning Source is
+             instant, so animating a single element's opacity fades the NEW
+             picture up from whatever is behind the control rather than from the
+             old picture. Two layers is how Playnite's own FadeImage does it. -->
+        <Image x:Name="PreviousImage"
+               Stretch="UniformToFill"
+               StretchDirection="Both"
+               RenderOptions.BitmapScalingMode="Linear"
+               Visibility="Collapsed"
+               IsHitTestVisible="False"/>
+
+        <!-- NotifyOnTargetUpdated is what drives the crossfade.
+             The binding is asynchronous, so the new picture arrives some time
+             after the path is set and there is no way to know when from the
+             code that set it. TargetUpdated fires exactly then, which is the
+             only correct moment to dissolve the old layer away. -->
         <Image x:Name="DisplayImage"
                Stretch="UniformToFill"
                StretchDirection="Both"
                RenderOptions.BitmapScalingMode="Linear"
-               Source="{Binding ImagePath, IsAsync=True}"/>
+               TargetUpdated="DisplayImage_TargetUpdated"
+               Source="{Binding ImagePath, IsAsync=True, NotifyOnTargetUpdated=True}"/>
 
         <!-- Video artwork, a renderer the Image cannot be: WPF's imaging stack
              does not decode containers. Only one of the two draws at a time.

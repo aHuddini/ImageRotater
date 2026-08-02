@@ -197,6 +197,7 @@ namespace ImageRotater.Controls
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             _animating = false;
 
+            StagePreviousCover();
             _data.ImagePath = path;
 
             DisplayImage.Visibility = Visibility.Visible;
@@ -370,9 +371,13 @@ namespace ImageRotater.Controls
                     // Fullscreen tile's layout pass is what took Playnite down
                     // before, so the fix has to work with the delay rather than
                     // remove it.
+                    StagePreviousCover();
                     _data.ImagePath = path;
                     _animating = false;
-                    ReleaseAnimationWhenStillArrives();
+
+                    // The animation is released by the same TargetUpdated
+                    // handler that runs the crossfade, so there is no separate
+                    // deferral to get right.
                 }
 
                 DisplayImage.Visibility = Visibility.Visible;
@@ -424,6 +429,7 @@ namespace ImageRotater.Controls
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
+            ClearPreviousCover();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
         }
@@ -433,46 +439,113 @@ namespace ImageRotater.Controls
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
+            ClearPreviousCover();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Visible;
         }
 
-        // Drops the GIF behaviour once the still it is being replaced by has
-        // actually decoded.
+        // Parks the cover currently on screen on the layer underneath, so the
+        // incoming one has something to dissolve FROM.
         //
-        // The still comes through an IsAsync binding, so it is not on screen
-        // when Refresh returns. Releasing the animation synchronously therefore
-        // blanked the tile for the length of that decode, which is the flicker
-        // that appeared on every animated-to-still rotation.
-        //
-        // Queued at Loaded priority: the async binding's own callback runs at
-        // that level, so this lands after it rather than racing it. If the
-        // decode is slower still, the worst case is an extra moment of the
-        // previous frame - the old behaviour's worst case was a blank.
-        private void ReleaseAnimationWhenStillArrives()
+        // Called before the bound path changes. A Fullscreen tile's own cover
+        // is a plain Image rather than a FadeImage, so unlike backgrounds there
+        // is no theme transition to defer to - the plugin has to do this or the
+        // switch is a hard cut.
+        private void StagePreviousCover()
         {
             try
             {
-                Dispatcher.BeginInvoke(
-                    System.Windows.Threading.DispatcherPriority.Loaded,
-                    new Action(() =>
-                    {
-                        // Another rotation may have chosen a GIF while this was
-                        // queued. Clearing then would kill an animation that is
-                        // legitimately playing.
-                        if (string.IsNullOrEmpty(_data.ImagePath))
-                        {
-                            return;
-                        }
+                if (DisplayImage.Source == null || DisplayImage.Visibility != Visibility.Visible)
+                {
+                    ClearPreviousCover();
+                    return;
+                }
 
-                        XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
-                    }));
+                PreviousImage.Source = DisplayImage.Source;
+                PreviousImage.Opacity = 1.0;
+                PreviousImage.Visibility = Visibility.Visible;
             }
             catch (Exception ex)
             {
-                Logger.Warn(ex, "ImageRotater: could not release the cover animation");
+                Logger.Warn(ex, "ImageRotater: could not stage the previous cover");
             }
         }
+
+        // Runs when the async binding actually delivers the new cover.
+        //
+        // This is the only moment the crossfade can start. The binding is
+        // asynchronous, so at the point the path was set the picture did not
+        // exist yet - an earlier version queued a dispatcher callback and hoped
+        // it landed afterwards, which is guesswork this event replaces.
+        private void DisplayImage_TargetUpdated(
+            object sender, System.Windows.Data.DataTransferEventArgs e)
+        {
+            // The GIF behaviour owns Image.Source while attached, and a still
+            // arriving means it is time to let go.
+            if (!string.IsNullOrEmpty(_data.ImagePath))
+            {
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+            }
+
+            CrossfadePreviousCover();
+        }
+
+        // Dissolves the outgoing layer away, revealing the cover already opaque
+        // beneath it.
+        //
+        // The OLD layer fades, not the new one: the incoming cover is fully
+        // drawn underneath from the first frame, so nothing behind the control
+        // is ever visible through the transition. Fading the new one up would
+        // show the tile's own artwork through the gap.
+        private void CrossfadePreviousCover()
+        {
+            try
+            {
+                if (PreviousImage.Source == null ||
+                    PreviousImage.Visibility != Visibility.Visible)
+                {
+                    return;
+                }
+
+                var fade = new System.Windows.Media.Animation.DoubleAnimation(
+                    1.0, 0.0, new Duration(CoverFadeDuration));
+
+                // Completed fires even for a REPLACED animation, so without a
+                // generation an older fade tears down the layer a newer one is
+                // still using.
+                int generation = ++_fadeGeneration;
+
+                fade.Completed += (s, e) =>
+                {
+                    if (generation == _fadeGeneration)
+                    {
+                        ClearPreviousCover();
+                    }
+                };
+
+                PreviousImage.BeginAnimation(OpacityProperty, fade);
+            }
+            catch (Exception ex)
+            {
+                ClearPreviousCover();
+                Logger.Warn(ex, "ImageRotater: could not crossfade the cover");
+            }
+        }
+
+        private void ClearPreviousCover()
+        {
+            PreviousImage.BeginAnimation(OpacityProperty, null);
+            PreviousImage.Opacity = 1.0;
+            PreviousImage.Visibility = Visibility.Collapsed;
+            PreviousImage.Source = null;
+        }
+
+        private int _fadeGeneration;
+
+        // Matched to what Playnite's own FadeImage uses for backgrounds, so a
+        // cover and a background switch at the same pace.
+        private static readonly TimeSpan CoverFadeDuration =
+            TimeSpan.FromMilliseconds(300);
 
         // Hands a video to the MediaElement and stands the Image down, so
         // exactly one renderer draws.
@@ -482,6 +555,8 @@ namespace ImageRotater.Controls
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
+
+            ClearPreviousCover();
 
             DisplayVideo.Source = new Uri(path);
             DisplayVideo.Visibility = Visibility.Visible;
