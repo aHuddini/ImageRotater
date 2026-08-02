@@ -231,8 +231,15 @@ namespace ImageRotater.Controls
                         return;
                     }
 
+                    // Staged then faded like any other pick. The outgoing
+                    // picture is a bitmap on the layer beneath, so it dissolves
+                    // away over the MediaElement exactly as it would over a
+                    // still - the renderer taking over underneath makes no
+                    // difference to the layer doing the fading.
+                    BeginCrossfade();
                     ShowVideo(path);
-                    FadeIn();
+                    RunCrossfade();
+
                     ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, 0);
                     return;
                 }
@@ -260,13 +267,18 @@ namespace ImageRotater.Controls
 
                     StopVideo();
 
+                    // Staged BEFORE the attached property takes Image.Source,
+                    // or there is nothing left to fade from - it clears Source
+                    // the moment it attaches.
+                    BeginCrossfade();
+
                     DisplayImage.Source = null;
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, new Uri(path));
 
                     DisplayImage.Visibility = Visibility.Visible;
                     MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
-                    FadeIn();
+                    RunCrossfade();
 
                     ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, 0);
                     return;
@@ -339,11 +351,15 @@ namespace ImageRotater.Controls
                 // just not any earlier than that.
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
 
+                // Hand the picture currently on screen to the layer underneath
+                // BEFORE replacing it, so there is something to dissolve from.
+                BeginCrossfade();
+
                 DisplayImage.Source = image;
                 DisplayImage.Visibility = Visibility.Visible;
                 MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
-                FadeIn();
+                RunCrossfade();
 
                 // Reports the source file's real dimensions, plus the bucket it
                 // was decoded at, so a soft-looking background can be traced to
@@ -356,69 +372,99 @@ namespace ImageRotater.Controls
             }
         }
 
-        // Crossfades a newly assigned background in.
+        // Parks the picture currently on screen on the layer underneath, so the
+        // incoming one has something to dissolve FROM.
         //
-        // Playnite's own background element is a FadeImage, which animates a
-        // source change for free - so in a theme like Aniki every game switch
-        // fades except ours, and a plugin background snapped in while
-        // everything around it dissolved. This control holds a plain WPF Image,
-        // which has no such behaviour: assigning Source is instantaneous.
+        // Called before DisplayImage.Source is replaced. An earlier version
+        // animated this control's own opacity instead, which was not a
+        // crossfade at all: Source is assigned instantly, so the old picture
+        // vanished, the new one appeared already swapped, and only then
+        // brightened from nothing - with whatever sits behind the control
+        // showing through while it did. In a theme that is its own background,
+        // which is exactly what made the fade look glitchy.
+        private void BeginCrossfade()
+        {
+            try
+            {
+                // Nothing on screen yet: first render, so there is nothing to
+                // fade from and the incoming image should simply appear.
+                if (DisplayImage.Source == null || DisplayImage.Visibility != Visibility.Visible)
+                {
+                    PreviousImage.Visibility = Visibility.Collapsed;
+                    PreviousImage.Source = null;
+                    return;
+                }
+
+                PreviousImage.Source = DisplayImage.Source;
+                PreviousImage.Opacity = 1.0;
+                PreviousImage.Visibility = Visibility.Visible;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not stage the previous background");
+            }
+        }
+
+        // Dissolves the outgoing layer away, revealing the new picture beneath
+        // it.
         //
-        // The fade is on THIS control's opacity rather than the Image's, so it
-        // covers whichever renderer drew - Image, GIF or MediaElement - without
-        // three separate cases.
+        // Fading the OLD one out rather than the new one in, deliberately: the
+        // new image is already fully opaque underneath, so nothing behind the
+        // control is ever visible through the transition. Fading the new one up
+        // would show the theme's own background through the gap.
         //
-        // Detached at the end (BeginAnimation with null) so a lingering clock
-        // cannot pin opacity for the session, and the value is restored to 1
-        // explicitly: a background must never be left half-transparent because
-        // an animation was interrupted.
-        private void FadeIn()
+        // The animation is detached and the layer cleared at the end, so a
+        // lingering clock cannot pin opacity for the session and a stale bitmap
+        // is not held alive.
+        private void RunCrossfade()
         {
             try
             {
                 Duration duration = FadeDuration;
 
-                // A theme that wants no fade at all, or wants to animate the
-                // container itself, sets this to zero.
-                if (!duration.HasTimeSpan || duration.TimeSpan <= TimeSpan.Zero)
+                bool nothingToFade =
+                    PreviousImage.Source == null ||
+                    PreviousImage.Visibility != Visibility.Visible;
+
+                // No previous picture, or a theme that wants no fade at all and
+                // set the duration to zero.
+                if (nothingToFade || !duration.HasTimeSpan || duration.TimeSpan <= TimeSpan.Zero)
                 {
-                    BeginAnimation(OpacityProperty, null);
-                    Opacity = 1.0;
+                    ClearPreviousLayer();
                     return;
                 }
 
-                var fade = new System.Windows.Media.Animation.DoubleAnimation(0.0, 1.0, duration);
+                var fade = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.0, duration);
 
-                // Completed fires even for an animation that was REPLACED, so
-                // a quick switch produced: fade A starts, fade B replaces it,
-                // A's Completed still runs and detaches - snapping opacity to 1
-                // and killing B halfway. The background jumped to full while
-                // showing whichever bitmap was assigned at that instant, which
-                // is the wrong-image-during-a-switch symptom.
-                //
-                // Only the newest fade is allowed to finish the job.
+                // Completed fires even for an animation that was REPLACED, so a
+                // quick switch ran: fade A starts, fade B replaces it, A's
+                // Completed still fires and tears down the layer B is using.
+                // Only the newest fade may finish the job.
                 int generation = ++_fadeGeneration;
 
                 fade.Completed += (s, e) =>
                 {
-                    if (generation != _fadeGeneration)
+                    if (generation == _fadeGeneration)
                     {
-                        return;
+                        ClearPreviousLayer();
                     }
-
-                    BeginAnimation(OpacityProperty, null);
-                    Opacity = 1.0;
                 };
 
-                BeginAnimation(OpacityProperty, fade);
+                PreviousImage.BeginAnimation(OpacityProperty, fade);
             }
             catch (Exception ex)
             {
-                // A failed animation must not leave the background invisible.
-                BeginAnimation(OpacityProperty, null);
-                Opacity = 1.0;
-                Logger.Warn(ex, "ImageRotater: could not fade the background in");
+                ClearPreviousLayer();
+                Logger.Warn(ex, "ImageRotater: could not crossfade the background");
             }
+        }
+
+        private void ClearPreviousLayer()
+        {
+            PreviousImage.BeginAnimation(OpacityProperty, null);
+            PreviousImage.Opacity = 1.0;
+            PreviousImage.Visibility = Visibility.Collapsed;
+            PreviousImage.Source = null;
         }
 
         // How long the crossfade takes, in milliseconds, from settings.
@@ -470,6 +516,10 @@ namespace ImageRotater.Controls
             DisplayImage.Source = null;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
+
+            // The crossfade layer too, or a game with no artwork keeps the
+            // previous game's picture on screen underneath.
+            ClearPreviousLayer();
         }
 
         // Hands a video to the MediaElement and hides the Image, so exactly one
