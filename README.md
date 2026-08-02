@@ -57,7 +57,7 @@ Right-click a game → **ImageRotater** → *Backgrounds* or *Covers*:
 
 | Command | What it does |
 | --- | --- |
-| Add images… | Copy files from disk into this game's folder |
+| Add artwork files… | Copy images or video from disk into this game's folder |
 | Browse SteamGridDB… | Pick artwork yourself, with filters |
 | Download from SteamGridDB | Take the best match without asking |
 | Open folder | Open this game's image folder |

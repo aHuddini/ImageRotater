@@ -281,8 +281,22 @@ namespace ImageRotater.Services
                 return 0;
             }
 
+            // One picker for every artwork format, rather than a separate "Add
+            // video" command beside "Add images".
+            //
+            // Nothing downstream distinguishes them: the store copies whatever
+            // it is handed, lists mp4 and webm alongside the image formats, and
+            // both controls already render video. A second menu item would be
+            // two commands doing identical work behind different filters, and a
+            // user who picked the wrong one would get a file dialog that
+            // silently hides the files they came for.
+            //
+            // The combined filter leads so the default view shows everything;
+            // the narrower groups are there for a folder holding both.
             List<string> selected = _api.Dialogs.SelectFiles(
-                "Image files|*.jpg;*.jpeg;*.png;*.bmp;*.webp;*.gif");
+                "Artwork|*.jpg;*.jpeg;*.png;*.bmp;*.webp;*.gif;*.mp4;*.webm"
+                + "|Images|*.jpg;*.jpeg;*.png;*.bmp;*.webp;*.gif"
+                + "|Video|*.mp4;*.webm");
 
             if (selected == null || selected.Count == 0)
             {

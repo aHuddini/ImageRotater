@@ -31,7 +31,11 @@ namespace ImageRotater.Services
                 yield return new GameMenuItem
                 {
                     MenuSection = section,
-                    Description = "Add images...",
+                    // "Artwork", not "images": the picker takes video too, and
+                    // a separate "Add video" item would be the same command
+                    // behind a narrower filter - with the wrong choice hiding
+                    // the files the user came for.
+                    Description = "Add artwork files...",
                     Action = a => handler.AddImages(selected, current)
                 };
 
