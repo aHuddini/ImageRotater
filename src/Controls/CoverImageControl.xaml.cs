@@ -179,6 +179,7 @@ namespace ImageRotater.Controls
 
             _data.ImagePath = path;
 
+            ShowControl();
             DisplayImage.Visibility = Visibility.Visible;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
         }
@@ -210,12 +211,6 @@ namespace ImageRotater.Controls
         {
             try
             {
-                // Undone here rather than in each of the four paths that draw
-                // something, so a new path cannot forget it and leave the
-                // control collapsed for the rest of the session. ShowNothing
-                // sets it again on the way out if there is still nothing.
-                Visibility = Visibility.Visible;
-
                 ImageRotaterSettings settings = _settings != null ? _settings() : null;
 
                 if (settings == null || !settings.EnableRotation || !settings.RotateCovers)
@@ -335,6 +330,7 @@ namespace ImageRotater.Controls
                     ReleaseAnimationWhenStillArrives();
                 }
 
+                ShowControl();
                 DisplayImage.Visibility = Visibility.Visible;
                 MissingImagePlaceholder.Visibility = Visibility.Collapsed;
             }
@@ -379,6 +375,23 @@ namespace ImageRotater.Controls
             return null;
         }
 
+        // Reveals the control, and is called only by paths that are ABOUT TO
+        // DRAW something.
+        //
+        // Not at the top of Refresh, which is where it was first put so no
+        // drawing path could forget it. That made the control visible before
+        // anyone knew whether this game had artwork, so a game with none went
+        // visible -> laid out -> collapsed, one frame later. Recycled tiles
+        // were already collapsed and never flashed, which is why it showed on
+        // the first pass through a library and not the second.
+        private void ShowControl()
+        {
+            if (Visibility != Visibility.Visible)
+            {
+                Visibility = Visibility.Visible;
+            }
+        }
+
         // Nothing to show for this game, so the control stands down ENTIRELY -
         // not just its children.
         //
@@ -405,6 +418,8 @@ namespace ImageRotater.Controls
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
+
+            ShowControl();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Visible;
         }
@@ -452,6 +467,8 @@ namespace ImageRotater.Controls
         {
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+
+            ShowControl();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
