@@ -287,7 +287,24 @@ namespace ImageRotater
             {
                 _rotationService.ApplyTo(selected, ArtworkKind.Cover);
 
+                // Only for a game the plugin actually has covers for.
+                //
+                // RefreshSoon calls UpdateTarget() on Playnite's OWN
+                // PART_ImageCover binding, which re-resolves
+                // FullscreenListItemCoverObject through its decoded-bitmap
+                // cache. For a game we rotated, that re-read IS the feature -
+                // it is the only way the tile ever sees a new cover.
+                //
+                // For a game the plugin has never touched it changes nothing
+                // and costs a native image reload, with the target property
+                // briefly between values - a black flash on a tile we had no
+                // business touching. Guarding on RotateCovers alone fired this
+                // on EVERY selection while browsing a library.
+                //
+                // HasDataCover is already computed for the selected game just
+                // above, so this is free.
                 if (Settings?.RotateCovers == true &&
+                    Settings?.HasDataCover == true &&
                     PlayniteApi.ApplicationInfo.Mode == ApplicationMode.Fullscreen)
                 {
                     _gridRefresher.RefreshSoon(selected.Id);

@@ -2,11 +2,14 @@
                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                      xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK"
-                     Background="Transparent">
-    <!-- Background="Transparent" explicitly, never inherited. See the note in
-         CoverImageControl.xaml: a theme's implicit Control style can supply a
-         dark Background, which this control would then paint over the theme's
-         own artwork for every game the plugin has nothing for. -->
+                     Background="Transparent"
+                     Visibility="Collapsed">
+    <!-- Background="Transparent" and Visibility="Collapsed" explicitly - see
+         the fuller note in CoverImageControl.xaml. A theme's implicit Control
+         style can supply a dark Background, and WPF's default Visibility is
+         Visible, so without both this control paints a dark rectangle over the
+         theme's own artwork from construction until Refresh decides it has
+         nothing to draw. -->
     <Grid x:Name="RootGrid" ClipToBounds="True">
 
         <Image x:Name="DisplayImage"
