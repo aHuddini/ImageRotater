@@ -5,6 +5,6 @@ using System.Runtime.InteropServices;
 [assembly: Guid("72b7d457-0621-429b-8368-665bc53ff896")]
 
 // Version information - updated automatically by scripts from version.txt
-[assembly: AssemblyVersion("0.37.0")]
-[assembly: AssemblyFileVersion("0.37.0")]
-[assembly: AssemblyInformationalVersion("0.37.0")]
+[assembly: AssemblyVersion("0.37.1")]
+[assembly: AssemblyFileVersion("0.37.1")]
+[assembly: AssemblyInformationalVersion("0.37.1")]

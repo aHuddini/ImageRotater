@@ -35,6 +35,11 @@ namespace ImageRotater.Controls
         // moved on to another game.
         private int _requestToken;
 
+        // The same idea for the crossfade. A replaced animation still raises
+        // Completed, so without this an older fade tidies up after a newer one
+        // and snaps opacity to 1 mid-transition.
+        private int _fadeGeneration;
+
         private int _currentBucket = 0;
 
         public BackgroundImageControl(IBackgroundImageSource source, ImageSelector selector, ImageLoader loader, Func<ImageRotaterSettings> settings)
@@ -90,6 +95,10 @@ namespace ImageRotater.Controls
 
             // Invalidate any decode still in flight.
             _requestToken++;
+
+            // And any refresh still waiting to be coalesced - an unloaded
+            // control must not wake up to render for a game it no longer shows.
+            _coalesce?.Stop();
         }
 
         // The SDK calls this when the selected game changes. This is the
@@ -98,8 +107,46 @@ namespace ImageRotater.Controls
         {
             // A different game means the previous pick no longer applies.
             _previousPick = null;
-            Refresh();
+            RefreshSoon();
         }
+
+        // Coalesces a burst of selection changes into one refresh.
+        //
+        // The request token already stops a superseded decode from RENDERING,
+        // which is what keeps the wrong image off screen. It cannot stop the
+        // decode being started: scrolling a library fires a context change per
+        // game, and each one spawns a full decode that is then thrown away -
+        // real work in a 32-bit process, and the same pressure that has taken
+        // Playnite down here before.
+        //
+        // Short enough to feel immediate when moving between games one at a
+        // time, long enough that holding a direction does not decode every game
+        // it passes. This is the same reason Playnite's own FadeImage exposes
+        // SourceUpdateDelay - a theme has no way to cancel a binding, so it
+        // debounces instead.
+        private void RefreshSoon()
+        {
+            if (_coalesce == null)
+            {
+                _coalesce = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(120)
+                };
+
+                _coalesce.Tick += (s, e) =>
+                {
+                    _coalesce.Stop();
+                    Refresh();
+                };
+            }
+
+            // Restarting is what coalesces: only the last change in a burst
+            // survives to fire.
+            _coalesce.Stop();
+            _coalesce.Start();
+        }
+
+        private System.Windows.Threading.DispatcherTimer _coalesce;
 
         private void OnSizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -173,6 +220,17 @@ namespace ImageRotater.Controls
                 // elements is ever visible.
                 if (PosterFrame.IsVideo(path))
                 {
+                    // Refresh is async void and re-entrant, so a newer one may
+                    // already have run to completion while this call was
+                    // between awaits earlier on. Rendering now would fade a
+                    // background for a game the user has left back over the
+                    // current one - which is the wrong image appearing during a
+                    // switch.
+                    if (token != _requestToken)
+                    {
+                        return;
+                    }
+
                     ShowVideo(path);
                     FadeIn();
                     ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, 0);
@@ -192,6 +250,14 @@ namespace ImageRotater.Controls
                 // must clear it or a GIF keeps playing under the next pick.
                 if (PosterFrame.IsAnimated(path))
                 {
+                    // Same reason as the video branch above: a newer Refresh
+                    // may already have rendered, and this one must not fade a
+                    // departed game's artwork back over it.
+                    if (token != _requestToken)
+                    {
+                        return;
+                    }
+
                     StopVideo();
 
                     DisplayImage.Source = null;
@@ -323,8 +389,23 @@ namespace ImageRotater.Controls
 
                 var fade = new System.Windows.Media.Animation.DoubleAnimation(0.0, 1.0, duration);
 
+                // Completed fires even for an animation that was REPLACED, so
+                // a quick switch produced: fade A starts, fade B replaces it,
+                // A's Completed still runs and detaches - snapping opacity to 1
+                // and killing B halfway. The background jumped to full while
+                // showing whichever bitmap was assigned at that instant, which
+                // is the wrong-image-during-a-switch symptom.
+                //
+                // Only the newest fade is allowed to finish the job.
+                int generation = ++_fadeGeneration;
+
                 fade.Completed += (s, e) =>
                 {
+                    if (generation != _fadeGeneration)
+                    {
+                        return;
+                    }
+
                     BeginAnimation(OpacityProperty, null);
                     Opacity = 1.0;
                 };

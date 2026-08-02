@@ -4,8 +4,18 @@
                      xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK">
     <Grid x:Name="RootGrid" ClipToBounds="True">
 
+        <!-- Anchored to the TOP, not centred.
+             UniformToFill crops whatever does not fit, and WPF's default
+             alignment centres that crop - so on a background taller than the
+             screen it cut equally from top and bottom. Game key art puts its
+             subject in the upper half almost without exception, and Playnite's
+             own background element anchors to the top for the same reason
+             (Aniki sets VerticalAlignment=Top on PART_ImageBackground). Centred
+             cropping is what reads as the image being positioned oddly. -->
         <Image x:Name="DisplayImage"
                Stretch="UniformToFill"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Top"
                RenderOptions.BitmapScalingMode="HighQuality"/>
 
         <!-- Video artwork. A separate element rather than a mode of the Image:
