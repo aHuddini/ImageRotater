@@ -18,6 +18,11 @@ out of the box. The guide covers the settings themes can bind, the element
 names, what each attempted workaround actually cost, and two traps that
 black-screen Fullscreen if you hit them.
 
+Want animated covers and backgrounds? That is **two elements, both pure
+additions** — there is a
+[worked example against Aniki ReMake](docs/THEME_INTEGRATION.md#worked-example-aniki-remake)
+with the exact markup and where it goes.
+
 If you find yourself patching a tile template to make covers rotate or display,
 stop — that is the plugin's job, and it already does it.
 

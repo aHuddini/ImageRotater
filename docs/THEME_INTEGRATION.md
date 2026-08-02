@@ -124,6 +124,94 @@ The plugin's control renders nothing for a game with no artwork, so in a grid
 the simplest correct answer is to leave your own element alone and let the
 control draw over it only where it has something.
 
+## Worked example: Aniki ReMake
+
+Two edits, both pure additions — nothing in the theme is modified or removed.
+This is the exact integration used to test the plugin, so the markup below is
+known to work rather than inferred.
+
+### 1. Animated covers — `DerivedStyles/ListGameItemTemplate.xaml`
+
+Find `PART_ImageCover` inside the `ListGameItemTemplate` style (the Fullscreen
+grid tile, around line 387) and add the control as a **sibling after it**, so it
+draws on top:
+
+```xml
+<Image x:Name="PART_ImageCover" ... />
+
+<!-- ImageRotater renders the cover: stills, animated GIF, MP4/WebM. -->
+<ContentControl x:Name="ImageRotater_Cover"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch"
+                Focusable="False"
+                IsTabStop="False"/>
+```
+
+`Focusable="False"` and `IsTabStop="False"` keep it out of controller
+navigation — the tile itself is the focus target, not the artwork inside it.
+
+No gating is needed. The control draws nothing for a game the plugin has no
+artwork for, so `PART_ImageCover` shows through untouched underneath.
+
+### 2. Animated backgrounds — `Views/Main.xaml`
+
+Find `PART_ImageBackground` in the wallpaper grid (around line 9691) and add the
+control **before it**, inside the same `Grid` so it inherits Aniki's zoom and
+translate transforms:
+
+```xml
+<ContentControl x:Name="ImageRotater_Background"
+                Panel.ZIndex="1"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                VerticalContentAlignment="Stretch"
+                Focusable="False"
+                IsTabStop="False">
+    <ContentControl.Style>
+        <Style TargetType="ContentControl">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <!-- Defer to the theme's own switches, exactly as
+                     PART_ImageBackground does, so turning the wallpaper off
+                     does not leave this drawing over a deliberately bare
+                     screen. -->
+                <DataTrigger Binding="{Settings Fullscreen.EnableMainBackgroundImage}" Value="False">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Items.Count, ElementName=PART_ListGameItems}" Value="0">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </ContentControl.Style>
+</ContentControl>
+
+<FadeImage x:Name="PART_ImageBackground" ... />
+```
+
+`Panel.ZIndex="1"` puts it above the theme's own wallpaper. The two
+`DataTrigger`s are optional but recommended: they make the plugin's background
+respect the same switches Aniki already honours for its own.
+
+### What you should see
+
+Only the **selected** tile animates. Every other tile showing animated artwork
+renders its still frame instead — a screenful of simultaneous decoders is what
+takes a 32-bit process down, and one moving cover reads better than twenty.
+
+### Aniki's BackgroundChanger blocks
+
+Aniki already hosts `BackgroundChanger_PluginBackgroundImage` and
+`BackgroundChanger_PluginCoverImage`. Leave them alone. They are gated on
+`{PluginStatus Plugin=playnite-backgroundchanger-plugin}`, which this plugin
+cannot satisfy, so they stay inert — and one of them carries a
+`ContentControl.Resources` Image style that would throw if it ever resolved
+against a real plugin control. See the `{Settings}`-in-`Setter.Value` trap
+below.
+
 ## What theme authors should NOT do
 
 Everything in this section was built and run against a live Fullscreen grid.
