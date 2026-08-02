@@ -120,6 +120,11 @@ namespace ImageRotater.Controls
         {
             try
             {
+                // Undone here rather than in each path that draws, so a new one
+                // cannot forget it and leave the control collapsed for the rest
+                // of the session. ShowNothing sets it again on the way out.
+                Visibility = Visibility.Visible;
+
                 int token = ++_requestToken;
 
                 // Recorded up front, before any early-out. A game with no image
@@ -289,11 +294,16 @@ namespace ImageRotater.Controls
         // frames while the behaviour holds a source, so a game with no
         // background would otherwise keep the previous game's GIF running
         // invisibly.
+        // Nothing to show, so the control stands down ENTIRELY - see the note
+        // on CoverImageControl.ShowNothing. A visible empty control still
+        // measures, arranges and paints whatever Background a theme's implicit
+        // Control style gave it, over the theme's own artwork.
         private void ShowNothing()
         {
             ClearImage();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
+            Visibility = Visibility.Collapsed;
         }
 
         private void ShowPlaceholder()

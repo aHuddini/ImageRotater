@@ -210,6 +210,12 @@ namespace ImageRotater.Controls
         {
             try
             {
+                // Undone here rather than in each of the four paths that draw
+                // something, so a new path cannot forget it and leave the
+                // control collapsed for the rest of the session. ShowNothing
+                // sets it again on the way out if there is still nothing.
+                Visibility = Visibility.Visible;
+
                 ImageRotaterSettings settings = _settings != null ? _settings() : null;
 
                 if (settings == null || !settings.EnableRotation || !settings.RotateCovers)
@@ -373,6 +379,17 @@ namespace ImageRotater.Controls
             return null;
         }
 
+        // Nothing to show for this game, so the control stands down ENTIRELY -
+        // not just its children.
+        //
+        // Collapsing only the Image left a visible, stretched, empty control
+        // over the tile's own cover. It painted nothing itself, but it still
+        // measured, arranged and composited on every tile realisation, and any
+        // Background a theme's implicit Control style handed it was drawn.
+        // Scrolling past games nobody had set up flickered black.
+        //
+        // A collapsed control is skipped by layout altogether, which is the
+        // correct answer for "this game is not ours".
         private void ShowNothing()
         {
             _data.ImagePath = string.Empty;
@@ -380,6 +397,7 @@ namespace ImageRotater.Controls
             StopVideo();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
+            Visibility = Visibility.Collapsed;
         }
 
         private void ShowPlaceholder()

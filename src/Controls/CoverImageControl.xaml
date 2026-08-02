@@ -1,7 +1,15 @@
 <c:PluginUserControl x:Class="ImageRotater.Controls.CoverImageControl"
                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                     xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK">
+                     xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK"
+                     Background="Transparent">
+    <!-- Background="Transparent" explicitly, never inherited.
+         PluginUserControl derives from Control, so a theme's implicit Control
+         style can hand it a Background - which on a dark theme is a dark
+         brush. Placed over a tile's own cover, that painted a black rectangle
+         for every game the plugin has no artwork for, appearing and vanishing
+         as the grid virtualised: the black flicker while scrolling past games
+         nobody had set up. -->
     <Grid x:Name="RootGrid" ClipToBounds="True">
 
         <!-- IsAsync=True is the load-bearing part, not a tuning choice.
