@@ -211,13 +211,29 @@ namespace ImageRotater.Controls
 
                 if (PosterFrame.IsAnimated(path))
                 {
-                    _data.ImagePath = string.Empty;
+                    // Order matters. The attached property takes Image.Source
+                    // synchronously, so it goes FIRST - clearing the binding
+                    // first would blank the tile until the animation loaded.
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, new Uri(path));
+                    _data.ImagePath = string.Empty;
                 }
                 else
                 {
-                    XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+                    // And the other way round here, for the opposite reason.
+                    //
+                    // The still arrives through a binding marked IsAsync=True,
+                    // so it lands some time AFTER this returns. Releasing the
+                    // animation first left Image.Source empty for that whole
+                    // gap - a visible blank on every animated-to-still
+                    // rotation. Handing over the path first means the old frame
+                    // stays up until the new image is decoded and ready.
+                    //
+                    // IsAsync is not negotiable: a synchronous decode inside a
+                    // Fullscreen tile's layout pass is what took Playnite down
+                    // before, so the fix has to work with the delay rather than
+                    // remove it.
                     _data.ImagePath = path;
+                    ReleaseAnimationWhenStillArrives();
                 }
 
                 DisplayImage.Visibility = Visibility.Visible;
@@ -280,6 +296,43 @@ namespace ImageRotater.Controls
             StopVideo();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Visible;
+        }
+
+        // Drops the GIF behaviour once the still it is being replaced by has
+        // actually decoded.
+        //
+        // The still comes through an IsAsync binding, so it is not on screen
+        // when Refresh returns. Releasing the animation synchronously therefore
+        // blanked the tile for the length of that decode, which is the flicker
+        // that appeared on every animated-to-still rotation.
+        //
+        // Queued at Loaded priority: the async binding's own callback runs at
+        // that level, so this lands after it rather than racing it. If the
+        // decode is slower still, the worst case is an extra moment of the
+        // previous frame - the old behaviour's worst case was a blank.
+        private void ReleaseAnimationWhenStillArrives()
+        {
+            try
+            {
+                Dispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Loaded,
+                    new Action(() =>
+                    {
+                        // Another rotation may have chosen a GIF while this was
+                        // queued. Clearing then would kill an animation that is
+                        // legitimately playing.
+                        if (string.IsNullOrEmpty(_data.ImagePath))
+                        {
+                            return;
+                        }
+
+                        XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+                    }));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not release the cover animation");
+            }
         }
 
         // Hands a video to the MediaElement and stands the Image down, so

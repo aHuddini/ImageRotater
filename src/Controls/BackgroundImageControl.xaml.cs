@@ -204,8 +204,14 @@ namespace ImageRotater.Controls
                 }
 
                 StopVideo();
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
 
+                // The animation is NOT released here.
+                //
+                // The decode below is awaited, so releasing first left
+                // Image.Source empty for its entire duration - a visible blank
+                // on every animated-to-still rotation, and longer for a large
+                // background than for a cover. The previous frame stays up
+                // until the replacement is actually in hand.
                 BitmapSource image = await _loader.LoadAsync(path, bucket);
 
                 // The user moved on while this was decoding.
@@ -256,6 +262,13 @@ namespace ImageRotater.Controls
                     ShowPlaceholder();
                     return;
                 }
+
+                // Released here, with the replacement already in hand, so the
+                // two assignments happen in the same frame and nothing blanks
+                // in between. The attached property owns Image.Source while
+                // set, so it has to go before the decoded bitmap is assigned -
+                // just not any earlier than that.
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
 
                 DisplayImage.Source = image;
                 DisplayImage.Visibility = Visibility.Visible;
