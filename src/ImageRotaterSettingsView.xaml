@@ -170,22 +170,6 @@
                                FontWeight="SemiBold"
                                Margin="0,0,0,4"/>
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
-                        <TextBlock Text="Fade the plugin's background over"
-                                   VerticalAlignment="Center"/>
-                        <TextBox Text="{Binding Settings.BackgroundFadeMilliseconds, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="50"
-                                 Margin="6,0"
-                                 VerticalContentAlignment="Center"/>
-                        <TextBlock Text="milliseconds"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <TextBlock Text="Only applies where a theme places the plugin's background element - Playnite's own background already crossfades. 300 matches it; 0 turns the fade off so a theme can animate the element itself."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,10"/>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
                         <TextBlock Text="Change the background every"
                                    VerticalAlignment="Center"/>
                         <TextBox Text="{Binding Settings.BackgroundSlideshowSeconds, UpdateSourceTrigger=PropertyChanged}"

@@ -4,21 +4,6 @@
                      xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK">
     <Grid x:Name="RootGrid" ClipToBounds="True">
 
-        <!-- The OUTGOING image, underneath, for the crossfade.
-             A single Image cannot crossfade: assigning Source is instant, so
-             animating the control's own opacity only faded the NEW picture up
-             from nothing over a hard cut - and whatever sat behind the control
-             showed through while it did, which in a theme is its own
-             background. Two layers is how Playnite's FadeImage does it, and
-             the only way to have one picture dissolve into another. -->
-        <Image x:Name="PreviousImage"
-               Stretch="UniformToFill"
-               HorizontalAlignment="Center"
-               VerticalAlignment="Top"
-               RenderOptions.BitmapScalingMode="HighQuality"
-               Visibility="Collapsed"
-               IsHitTestVisible="False"/>
-
         <!-- Anchored to the TOP, not centred.
              UniformToFill crops whatever does not fit, and WPF's default
              alignment centres that crop - so on a background taller than the

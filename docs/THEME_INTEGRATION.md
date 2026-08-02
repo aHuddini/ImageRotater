@@ -196,33 +196,6 @@ translate transforms:
 `DataTrigger`s are optional but recommended: they make the plugin's background
 respect the same switches Aniki already honours for its own.
 
-### Matching your theme's fade
-
-Playnite's own background element is a `FadeImage`, which crossfades a source
-change for free. The plugin's control holds a plain WPF `Image`, which does not
-— so without help a plugin background snaps in while every other switch in the
-theme dissolves.
-
-It therefore fades itself, over 300ms by default, matching Playnite's own.
-
-The pace is a plugin **setting**, not a XAML property, and that is forced: a
-theme cannot reference a plugin assembly at all — a `clr-namespace` pointing at
-`ImageRotater` makes the whole resource dictionary fail to load and Playnite
-falls back to the default theme. So there is no markup a theme could write to
-set a property on our control.
-
-If the default clashes with your theme's timing, tell users to change
-**Background fade** in the plugin's settings, or set it to 0 and animate the
-container yourself:
-
-```xml
-<ContentControl x:Name="ImageRotater_Background" ...>
-    <ContentControl.Triggers>
-        <!-- your own transition here -->
-    </ContentControl.Triggers>
-</ContentControl>
-```
-
 ### What you should see
 
 Only the **selected** tile animates. Every other tile showing animated artwork

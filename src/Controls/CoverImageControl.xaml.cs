@@ -119,10 +119,31 @@ namespace ImageRotater.Controls
         {
             Action<Guid> handler = ArtworkRotated;
 
-            if (handler != null)
+            if (handler == null)
             {
-                handler(gameId);
+                return;
             }
+
+            // Marshalled to the UI thread HERE rather than at each call site.
+            //
+            // The Fullscreen slideshow raises this from inside a Task.Run - the
+            // cover write is done off-thread deliberately, so the fade window
+            // contains only the binding re-read. Every handler then reads
+            // GameContext, which is a WPF DependencyProperty and throws
+            // "The calling thread cannot access this object because a different
+            // thread owns it" when touched from anywhere else.
+            //
+            // Fixing it at the announcement means a future caller cannot
+            // reintroduce it by forgetting to marshal.
+            Application app = Application.Current;
+
+            if (app != null && !app.Dispatcher.CheckAccess())
+            {
+                app.Dispatcher.BeginInvoke(new Action(() => handler(gameId)));
+                return;
+            }
+
+            handler(gameId);
         }
 
         // Which game is selected right now, so only that tile animates.
@@ -151,12 +172,11 @@ namespace ImageRotater.Controls
 
             // Both the tile gaining selection and the one losing it need to
             // re-decide, and neither gets a context change for it.
-            Action<Guid> handler = ArtworkRotated;
-
-            if (handler != null)
-            {
-                handler(gameId);
-            }
+            //
+            // Routed through NotifyArtworkRotated rather than raising the event
+            // directly, so this cannot bypass the UI-thread marshalling that
+            // lives there.
+            NotifyArtworkRotated(gameId);
         }
 
         private bool IsSelectedTile
