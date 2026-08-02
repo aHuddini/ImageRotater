@@ -16,7 +16,11 @@ namespace ImageRotater.Controls
 
         private readonly IBackgroundImageSource _source;
         private readonly ImageSelector _selector;
-        private readonly ImageLoader _loader;
+        // Kept as a constructor parameter but no longer used: still picks now
+        // defer to Playnite's own background element, so this control never
+        // decodes a bitmap. The parameter stays so the plugin's construction
+        // call does not have to change shape for a dependency that may return
+        // if the still path ever comes back.
 
         // An accessor, not the settings object: saving settings replaces the
         // whole object, so a captured reference would go stale immediately.
@@ -43,7 +47,6 @@ namespace ImageRotater.Controls
 
             _source = source;
             _selector = selector;
-            _loader = loader;
             _settings = settings;
 
             // Subscribe in Loaded, unsubscribe in Unloaded. Never in the
@@ -112,11 +115,16 @@ namespace ImageRotater.Controls
             }
         }
 
-        // async void is unavoidable - this is event-handler shaped - so the
-        // catch-all is the standard mitigation. Without it an exception after
-        // the await (a disposed dispatcher during shutdown, say) is rethrown on
-        // the SynchronizationContext and takes Playnite down.
-        private async void Refresh()
+        // Synchronous now that stills defer to Playnite's own background.
+        //
+        // This used to decode a bitmap here, which is why it was async void -
+        // that decode is gone with the still branch, and the only work left is
+        // handing a path to XamlAnimatedGif or a MediaElement, both of which
+        // load on their own.
+        //
+        // The catch-all stays regardless: an exception escaping into Playnite's
+        // layout pass is not caught above us and takes the process down.
+        private void Refresh()
         {
             try
             {
@@ -137,7 +145,7 @@ namespace ImageRotater.Controls
                 }
 
                 Game game = GameContext;
-                if (game == null || _source == null || _selector == null || _loader == null)
+                if (game == null || _source == null || _selector == null)
                 {
                     ShowNothing();
                     return;
@@ -218,81 +226,25 @@ namespace ImageRotater.Controls
                     return;
                 }
 
-                StopVideo();
-
-                // The animation is NOT released here.
+                // A STILL pick is left to Playnite.
                 //
-                // The decode below is awaited, so releasing first left
-                // Image.Source empty for its entire duration - a visible blank
-                // on every animated-to-still rotation, and longer for a large
-                // background than for a cover. The previous frame stays up
-                // until the replacement is actually in hand.
-                BitmapSource image = await _loader.LoadAsync(path, bucket);
-
-                // The user moved on while this was decoding.
-                if (token != _requestToken)
-                {
-                    return;
-                }
-
-                // Try the other candidates before giving up. The write path has
-                // done this since 0.5.4; this one never did, so a single
-                // unloadable file here showed a placeholder instead of the
-                // artwork that was sitting right beside it - which is what made
-                // the blank look intermittent rather than tied to one game.
-                if (image == null)
-                {
-                    foreach (string alternate in candidates)
-                    {
-                        if (string.Equals(alternate, path, StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        image = await _loader.LoadAsync(alternate, bucket);
-
-                        if (token != _requestToken)
-                        {
-                            return;
-                        }
-
-                        if (image != null)
-                        {
-                            path = alternate;
-                            _previousPick = alternate;
-                            break;
-                        }
-                    }
-                }
-
-                if (image == null)
-                {
-                    // A path existed but did not load: the file is missing or
-                    // corrupt. That is a real problem worth surfacing - once.
-                    if (_loggedFailures.Add(path))
-                    {
-                        Logger.Warn($"ImageRotater: could not load background image: {path}");
-                    }
-
-                    ShowPlaceholder();
-                    return;
-                }
-
-                // Released here, with the replacement already in hand, so the
-                // two assignments happen in the same frame and nothing blanks
-                // in between. The attached property owns Image.Source while
-                // set, so it has to go before the decoded bitmap is assigned -
-                // just not any earlier than that.
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
-
-                DisplayImage.Source = image;
-                DisplayImage.Visibility = Visibility.Visible;
-                MissingImagePlaceholder.Visibility = Visibility.Collapsed;
-
-                // Reports the source file's real dimensions, plus the bucket it
-                // was decoded at, so a soft-looking background can be traced to
-                // either a small source or the wrong decode size.
-                ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, image.PixelWidth);
+                // Backgrounds always write Game.BackgroundImage as well, and a
+                // theme renders that through a FadeImage which crossfades a
+                // source change for free. Drawing the same picture again here
+                // just covers that up with an opaque layer that swaps
+                // instantly - which is exactly what happened when this control
+                // was added for animated artwork: the fade users had before did
+                // not break, it was hidden.
+                //
+                // So this control renders only what the write path CANNOT: GIFs
+                // and video, handled above. For everything else it stands down
+                // and lets the theme's own transition through.
+                //
+                // Three attempts at reimplementing that fade here all traded
+                // one artefact for another. There is nothing to reimplement.
+                StopVideo();
+                ShowNothing();
+                ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, 0);
             }
             catch (Exception ex)
             {
