@@ -1,0 +1,11 @@
+Id: ImageRotater.72b7d457-0621-429b-8368-665bc53ff896
+Name: ImageRotater
+Author: Huddini
+Version: 0.32.3
+Module: ImageRotater.dll
+Type: GenericPlugin
+Icon: icon.png
+Description: Rotates game background images in Playnite, built for smooth performance in Fullscreen themes.
+Links:
+  - Name: GitHub Repository
+    Url: https://github.com/aHuddini/ImageRotater

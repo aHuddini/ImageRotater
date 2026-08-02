@@ -1,0 +1,8 @@
+bin/
+obj/
+package/
+pext/
+*.user
+.vs/
+.cursor/
+*.log

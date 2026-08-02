@@ -1,0 +1,75 @@
+<c:PluginUserControl x:Class="ImageRotater.Controls.CoverImageControl"
+                     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK">
+    <Grid x:Name="RootGrid" ClipToBounds="True">
+
+        <!-- IsAsync=True is the load-bearing part, not a tuning choice.
+             Fullscreen realises many tiles at once, and a synchronous decode
+             inside the layout pass is what took Playnite down when an earlier
+             version of this control was placed in a grid template. Binding a
+             PATH asynchronously moves the decode off that thread.
+
+             Stretch is set here rather than left to a hosting theme's implicit
+             Image style. A theme cannot supply that style through
+             ContentControl.Resources: Playnite's {Settings} markup extension is
+             illegal in a Setter.Value, and the style is only sealed - and the
+             exception only thrown - once the ContentControl actually resolves
+             to a plugin control. Aniki carries exactly such a Setter for
+             BackgroundChanger and never trips it, because that plugin is not
+             installed.
+
+             Themes wanting different sizing keep this control hidden and bind
+             CoverData.ImagePath, rendering it with their own element - which is
+             the integration pattern Aniki's author describes. -->
+        <Image x:Name="DisplayImage"
+               Stretch="UniformToFill"
+               StretchDirection="Both"
+               RenderOptions.BitmapScalingMode="Linear"
+               Source="{Binding ImagePath, IsAsync=True}"/>
+
+        <!-- Video artwork, a renderer the Image cannot be: WPF's imaging stack
+             does not decode containers. Only one of the two draws at a time.
+
+             LoadedBehavior=Manual so Play/Stop can be driven from code-behind -
+             the default starts on load and ignores those calls. Always muted:
+             a library that made noise while you scrolled it would be a bug. -->
+        <MediaElement x:Name="DisplayVideo"
+                      Visibility="Collapsed"
+                      Stretch="UniformToFill"
+                      LoadedBehavior="Manual"
+                      UnloadedBehavior="Stop"
+                      IsMuted="True"
+                      ScrubbingEnabled="False"
+                      MediaEnded="DisplayVideo_MediaEnded"
+                      MediaFailed="DisplayVideo_MediaFailed"/>
+
+        <!-- Shown only when a path exists but will not load, which is a real
+             fault worth surfacing. A game with no plugin cover renders nothing
+             so the theme's own artwork shows through - that is not an error. -->
+        <Viewbox x:Name="MissingImagePlaceholder"
+                 Visibility="Collapsed"
+                 Tag="{DynamicResource TextBrush}"
+                 Width="64" Height="64"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 Opacity="0.28">
+            <Canvas Width="24" Height="24">
+                <Path Data="M3,3 H21 V21 H3 Z"
+                      Stroke="{Binding Tag, ElementName=MissingImagePlaceholder, TargetNullValue=#FFCCCCCC, FallbackValue=#FFCCCCCC}"
+                      StrokeThickness="1.2"
+                      Fill="Transparent"/>
+                <Path Data="M9.2,9.1 C9.2,7.7 10.4,6.8 12,6.8 C13.6,6.8 14.8,7.7 14.8,9.1 C14.8,10.6 13.4,10.9 12.6,11.8 C12.2,12.3 12.1,12.8 12.1,13.6"
+                      Stroke="{Binding Tag, ElementName=MissingImagePlaceholder, TargetNullValue=#FFCCCCCC, FallbackValue=#FFCCCCCC}"
+                      StrokeThickness="1.4"
+                      Fill="Transparent"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"/>
+                <Ellipse Canvas.Left="11.35" Canvas.Top="15.2"
+                         Width="1.4" Height="1.4"
+                         Fill="{Binding Tag, ElementName=MissingImagePlaceholder, TargetNullValue=#FFCCCCCC, FallbackValue=#FFCCCCCC}"/>
+            </Canvas>
+        </Viewbox>
+
+    </Grid>
+</c:PluginUserControl>
