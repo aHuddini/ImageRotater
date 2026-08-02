@@ -197,6 +197,8 @@ namespace ImageRotater.Services
                         .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                         .ToList());
 
+                listed = PreferChosenOverPreserved(listed);
+
                 lock (_listCacheLock)
                 {
                     _listCache[key] = Tuple.Create(stamp, listed);
@@ -242,6 +244,58 @@ namespace ImageRotater.Services
             return string.IsNullOrEmpty(ext)
                 ? PublishedVideoBaseName
                 : PublishedVideoBaseName + ext.ToLowerInvariant();
+        }
+
+        // Artwork the user chose wins over artwork that merely happened to be
+        // there.
+        //
+        // A preserved original is whatever Playnite already had for the game -
+        // a Steam grid, a metadata provider's cover - copied in the first time
+        // the plugin rotated it. That copy has to exist: once Game.CoverImage
+        // points at a plugin file the original is unreferenced, Playnite's
+        // library cleanup can reclaim it, and "Restore original backgrounds"
+        // then holds an id that resolves to nothing.
+        //
+        // But existing for safety is not the same as competing for screen time.
+        // Rotating a deliberately-added animated cover against the still that
+        // came with the game reads as the animation breaking every few seconds,
+        // and the still is not even the same picture.
+        //
+        // So preserved art rotates only when it is ALL the game has. Add
+        // anything of your own and it steps aside, still on disk, still
+        // restorable.
+        private static IReadOnlyList<string> PreferChosenOverPreserved(IReadOnlyList<string> paths)
+        {
+            if (paths.Count < 2)
+            {
+                return paths;
+            }
+
+            var chosen = new List<string>(paths.Count);
+
+            for (int i = 0; i < paths.Count; i++)
+            {
+                if (!IsPreservedOriginal(paths[i]))
+                {
+                    chosen.Add(paths[i]);
+                }
+            }
+
+            // Nothing but preserved art - it is the whole rotation, as it
+            // should be for a game the user has not set up.
+            return chosen.Count > 0 ? chosen : paths;
+        }
+
+        // Matches the prefix OriginalArtPreserver writes. Kept here rather than
+        // referenced from that class so the listing has no dependency on it.
+        public const string PreservedPrefix = "original_";
+
+        public static bool IsPreservedOriginal(string path)
+        {
+            string name = Path.GetFileName(path);
+
+            return !string.IsNullOrEmpty(name)
+                && name.StartsWith(PreservedPrefix, StringComparison.OrdinalIgnoreCase);
         }
 
         // The published copy is not a candidate. It is a COPY of one, so
