@@ -118,6 +118,45 @@ namespace ImageRotater.Tests.Services
             Assert.AreEqual(2, Candidates().Count);
         }
 
+        // When a preserved copy and the file it was copied FROM are both
+        // present, the real file is the one that survives deduplication.
+        //
+        // The survivor used to be whichever sorted first, and "original_" sorts
+        // before "sgdb_" and "web_" - so the preserved duplicate displaced the
+        // artwork it had been copied from. The bytes are the same either way,
+        // but the surviving name then looked like the user's own art when it
+        // was a copy of ours, and the exclusion rule above could no longer tell
+        // them apart.
+        [Test]
+        public void APreservedDuplicateLosesToTheArtworkItCopied()
+        {
+            // Same bytes under both names - which is exactly what preservation
+            // of an already-plugin-owned cover produces.
+            string chosen = Path.Combine(_root, "sgdb_135535.jpg");
+
+            using (var bmp = new Bitmap(40, 40))
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.SlateBlue);
+                bmp.Save(chosen, ImageFormat.Jpeg);
+            }
+
+            string preserved = Path.Combine(_root, "original_copy.jpg");
+            File.Copy(chosen, preserved);
+
+            _store.AddImage(_gameId, chosen, ArtworkKind.Cover);
+            _store.AddImage(_gameId, preserved, ArtworkKind.Cover);
+
+            var listed = Candidates();
+
+            Assert.AreEqual(1, listed.Count, "identical content must collapse to one candidate");
+
+            Assert.IsFalse(GameImageStore.IsPreservedOriginal(listed[0]),
+                "the real artwork must survive, not the preserved copy of it");
+
+            StringAssert.Contains("sgdb_135535", listed[0]);
+        }
+
         [Test]
         public void ThePrefixIsMatchedCaseInsensitively()
         {

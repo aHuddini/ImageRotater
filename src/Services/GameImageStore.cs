@@ -532,6 +532,28 @@ namespace ImageRotater.Services
                     bucket.Add(path);
                 }
 
+                // Within a bucket, artwork the user chose outranks a preserved
+                // original of the SAME image.
+                //
+                // The survivor used to be whichever sorted first, and
+                // "original_" sorts before "sgdb_" and "web_" - so a preserved
+                // copy displaced the real file it was copied from. Harmless for
+                // stills, since the bytes are identical either way, but it also
+                // meant the surviving name looked like the user's own art when
+                // it was a duplicate of ours.
+                foreach (List<string> bucket in byLength.Values)
+                {
+                    bucket.Sort((a, b) =>
+                    {
+                        bool pa = IsPreservedOriginal(a);
+                        bool pb = IsPreservedOriginal(b);
+
+                        return pa == pb
+                            ? string.Compare(a, b, StringComparison.OrdinalIgnoreCase)
+                            : (pa ? 1 : -1);
+                    });
+                }
+
                 var drop = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (List<string> bucket in byLength.Values)
@@ -553,8 +575,10 @@ namespace ImageRotater.Services
 
                         if (seenHashes.ContainsKey(hash))
                         {
-                            // First alphabetically survives - the list arrives
-                            // sorted, so this is deterministic across calls.
+                            // The first in bucket order survives, and the sort
+                            // above puts chosen artwork ahead of preserved
+                            // copies, alphabetical within each group - so this
+                            // stays deterministic across calls.
                             drop.Add(path);
                         }
                         else
