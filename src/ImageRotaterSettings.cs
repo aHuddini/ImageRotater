@@ -72,6 +72,10 @@ namespace ImageRotater
         private int backgroundSlideshowSeconds = 0;
         private int coverSlideshowSeconds = 0;
 
+        // 300ms matches what Playnite's own FadeImage does, so a plugin
+        // background and a theme's own switch at the same pace.
+        private int backgroundFadeMilliseconds = 300;
+
         // Session by default: a new cover per Playnite launch. This is the
         // behaviour users asked for by name, and constant cover reshuffling
         // makes a grid read as noise.
@@ -272,6 +276,27 @@ namespace ImageRotater
         {
             get => backgroundSlideshowSeconds;
             set { backgroundSlideshowSeconds = value; OnPropertyChanged(); }
+        }
+
+        // How long the plugin's own background crossfades for.
+        //
+        // Playnite's background element is a FadeImage and animates a source
+        // change for free; the plugin's control holds a plain WPF Image and
+        // does not, so without this a plugin background snapped in while every
+        // other switch in the theme dissolved.
+        //
+        // A setting rather than something a theme sets in markup, because a
+        // theme cannot reference a plugin assembly - a clr-namespace pointing
+        // at ImageRotater makes the whole resource dictionary fail to load. And
+        // it cannot be read from the theme either: FadeImage lives in
+        // Playnite's own assembly rather than the SDK.
+        //
+        // 0 disables the fade, for a theme that would rather animate the
+        // container itself.
+        public int BackgroundFadeMilliseconds
+        {
+            get => backgroundFadeMilliseconds;
+            set { backgroundFadeMilliseconds = value; OnPropertyChanged(); }
         }
 
         // Same, for the selected game's cover tile. Native tiles hard-swap -

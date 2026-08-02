@@ -174,6 +174,7 @@ namespace ImageRotater.Controls
                 if (PosterFrame.IsVideo(path))
                 {
                     ShowVideo(path);
+                    FadeIn();
                     ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, 0);
                     return;
                 }
@@ -198,6 +199,8 @@ namespace ImageRotater.Controls
 
                     DisplayImage.Visibility = Visibility.Visible;
                     MissingImagePlaceholder.Visibility = Visibility.Collapsed;
+
+                    FadeIn();
 
                     ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, 0);
                     return;
@@ -274,6 +277,8 @@ namespace ImageRotater.Controls
                 DisplayImage.Visibility = Visibility.Visible;
                 MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
+                FadeIn();
+
                 // Reports the source file's real dimensions, plus the bucket it
                 // was decoded at, so a soft-looking background can be traced to
                 // either a small source or the wrong decode size.
@@ -282,6 +287,82 @@ namespace ImageRotater.Controls
             catch (Exception ex)
             {
                 Logger.Error(ex, "ImageRotater refresh failed");
+            }
+        }
+
+        // Crossfades a newly assigned background in.
+        //
+        // Playnite's own background element is a FadeImage, which animates a
+        // source change for free - so in a theme like Aniki every game switch
+        // fades except ours, and a plugin background snapped in while
+        // everything around it dissolved. This control holds a plain WPF Image,
+        // which has no such behaviour: assigning Source is instantaneous.
+        //
+        // The fade is on THIS control's opacity rather than the Image's, so it
+        // covers whichever renderer drew - Image, GIF or MediaElement - without
+        // three separate cases.
+        //
+        // Detached at the end (BeginAnimation with null) so a lingering clock
+        // cannot pin opacity for the session, and the value is restored to 1
+        // explicitly: a background must never be left half-transparent because
+        // an animation was interrupted.
+        private void FadeIn()
+        {
+            try
+            {
+                Duration duration = FadeDuration;
+
+                // A theme that wants no fade at all, or wants to animate the
+                // container itself, sets this to zero.
+                if (!duration.HasTimeSpan || duration.TimeSpan <= TimeSpan.Zero)
+                {
+                    BeginAnimation(OpacityProperty, null);
+                    Opacity = 1.0;
+                    return;
+                }
+
+                var fade = new System.Windows.Media.Animation.DoubleAnimation(0.0, 1.0, duration);
+
+                fade.Completed += (s, e) =>
+                {
+                    BeginAnimation(OpacityProperty, null);
+                    Opacity = 1.0;
+                };
+
+                BeginAnimation(OpacityProperty, fade);
+            }
+            catch (Exception ex)
+            {
+                // A failed animation must not leave the background invisible.
+                BeginAnimation(OpacityProperty, null);
+                Opacity = 1.0;
+                Logger.Warn(ex, "ImageRotater: could not fade the background in");
+            }
+        }
+
+        // How long the crossfade takes, in milliseconds, from settings.
+        //
+        // A SETTING rather than a property a theme sets in markup, and that is
+        // forced rather than chosen: a theme cannot reference a plugin assembly
+        // at all - a clr-namespace pointing at ImageRotater makes the whole
+        // resource dictionary fail to load - so there is no XAML a theme could
+        // write to reach a property on this control.
+        //
+        // Nor can the value be read from the theme: Playnite's FadeImage, which
+        // is what a theme's own background fades with, lives in Playnite's own
+        // assembly rather than the SDK. The plugin cannot ask it what pace the
+        // theme chose.
+        //
+        // 300ms matches Playnite's own default. Zero turns the fade off, for a
+        // theme that would rather animate the container itself.
+        private TimeSpan FadeDuration
+        {
+            get
+            {
+                ImageRotaterSettings settings = _settings != null ? _settings() : null;
+                int ms = settings != null ? settings.BackgroundFadeMilliseconds : 300;
+
+                return TimeSpan.FromMilliseconds(ms < 0 ? 0 : ms);
             }
         }
 
