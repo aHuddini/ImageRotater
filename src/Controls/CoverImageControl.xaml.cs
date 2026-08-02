@@ -255,8 +255,34 @@ namespace ImageRotater.Controls
                     return;
                 }
 
-                string path = _selector.Select(
-                    game.Id, candidates, _previousPick, settings.CoverSelectionMode);
+                // The pick the ROTATION made, when there is one for this game.
+                //
+                // Choosing again here meant two independent rolls for the same
+                // tile: the rotation writes Game.CoverImage and the grid
+                // refresher makes Playnite's own PART_ImageCover re-read it,
+                // while this control selected separately and drew on top. Two
+                // different covers for one game, updating at different moments -
+                // which is the image seen flipping back and forth.
+                //
+                // The published value names the pick and the game it belongs
+                // to, set together by the publisher precisely so the two cannot
+                // drift apart.
+                string path = null;
+
+                if (string.Equals(settings.CurrentCoverGameId, game.Id.ToString(),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    path = settings.CurrentCoverPath;
+                }
+
+                // No published pick for this game - a tile scrolled past
+                // without ever being selected, so rotation has not run for it.
+                // Choosing here is then the only way it shows anything.
+                if (string.IsNullOrEmpty(path))
+                {
+                    path = _selector.Select(
+                        game.Id, candidates, _previousPick, settings.CoverSelectionMode);
+                }
 
                 // Recorded before use, so a pick that turns out to be unusable
                 // still counts as tried and rotation moves past it.
