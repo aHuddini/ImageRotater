@@ -464,6 +464,7 @@ namespace ImageRotater.Controls
                 PreviousImage.Source = DisplayImage.Source;
                 PreviousImage.Opacity = 1.0;
                 PreviousImage.Visibility = Visibility.Visible;
+
             }
             catch (Exception ex)
             {
@@ -480,6 +481,7 @@ namespace ImageRotater.Controls
         private void DisplayImage_TargetUpdated(
             object sender, System.Windows.Data.DataTransferEventArgs e)
         {
+
             // The GIF behaviour owns Image.Source while attached, and a still
             // arriving means it is time to let go.
             if (!string.IsNullOrEmpty(_data.ImagePath))

@@ -22,18 +22,6 @@
              Themes wanting different sizing keep this control hidden and bind
              CoverData.ImagePath, rendering it with their own element - which is
              the integration pattern Aniki's author describes. -->
-        <!-- The OUTGOING cover, underneath, for the crossfade.
-             One Image cannot dissolve into another: assigning Source is
-             instant, so animating a single element's opacity fades the NEW
-             picture up from whatever is behind the control rather than from the
-             old picture. Two layers is how Playnite's own FadeImage does it. -->
-        <Image x:Name="PreviousImage"
-               Stretch="UniformToFill"
-               StretchDirection="Both"
-               RenderOptions.BitmapScalingMode="Linear"
-               Visibility="Collapsed"
-               IsHitTestVisible="False"/>
-
         <!-- NotifyOnTargetUpdated is what drives the crossfade.
              The binding is asynchronous, so the new picture arrives some time
              after the path is set and there is no way to know when from the
@@ -45,6 +33,24 @@
                RenderOptions.BitmapScalingMode="Linear"
                TargetUpdated="DisplayImage_TargetUpdated"
                Source="{Binding ImagePath, IsAsync=True, NotifyOnTargetUpdated=True}"/>
+
+        <!-- The OUTGOING cover, and it must be declared AFTER DisplayImage.
+             Later children of a Grid draw on top, and this one has to be the
+             layer that fades AWAY - revealing the new picture already opaque
+             beneath it. Declared first, it sat underneath and dissolved while
+             completely hidden by the incoming cover: the animation ran
+             perfectly and was invisible, which looked like the fade doing
+             nothing at all.
+
+             One Image cannot dissolve into another - assigning Source is
+             instant - so two layers is the only way, and it is how Playnite's
+             own FadeImage does it. -->
+        <Image x:Name="PreviousImage"
+               Stretch="UniformToFill"
+               StretchDirection="Both"
+               RenderOptions.BitmapScalingMode="Linear"
+               Visibility="Collapsed"
+               IsHitTestVisible="False"/>
 
         <!-- Video artwork, a renderer the Image cannot be: WPF's imaging stack
              does not decode containers. Only one of the two draws at a time.
