@@ -25,7 +25,7 @@ stop — that is the plugin's job, and it already does it.
 
 | Issue | Status |
 | --- | --- |
-| **Animated covers on Fullscreen grid tiles** don't animate | Playnite renders those tiles through a WPF `Image`, which shows a GIF's first frame and cannot decode video. Doing it from a theme works but costs a crash or a regression every way it has been tried — [details](docs/THEME_INTEGRATION.md#what-theme-authors-should-not-do). Backgrounds animate fine, as do covers in any theme hosting the plugin's own cover control. |
+| **Animated covers on Fullscreen grid tiles** need one line from the theme | Playnite's own tile renders covers through a WPF `Image`, which shows a GIF's first frame and cannot decode video. The plugin's cover control is a full renderer — place `<ContentControl x:Name="ImageRotater_Cover"/>` in the tile template and animated covers work. [Details](docs/THEME_INTEGRATION.md#animated-covers-place-the-plugins-control). Backgrounds animate with no theme support at all. |
 | **Fullscreen grid covers need a plugin-side workaround** to rotate at all | Playnite never notifies `FullscreenListItemCoverObject` when a cover changes, so the plugin re-evaluates the tile binding itself. Works, but the real fix is [one line upstream](docs/PLAYNITE_ISSUE_DRAFT.md). |
 | **WebM may not play** on a stock Windows install | No bundled decoder. MP4/H.264 plays everywhere. |
 | **Cannot run alongside BackgroundChanger** | Playnite routes a shared theme element name to whichever plugin claimed it first, so the result depends on load order. Disable BackgroundChanger before using this. |

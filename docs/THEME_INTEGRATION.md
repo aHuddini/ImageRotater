@@ -12,36 +12,27 @@ section below records the underlying Playnite bug and what each attempted
 approach actually cost, for anyone maintaining this or attempting the same
 elsewhere.
 
-**ANIMATED covers on Fullscreen grid tiles are possible but not viable, and the
-plugin does not ship them.** Rotation and animation are separate problems with
-separate answers:
+**ANIMATED covers on Fullscreen grid tiles need one element from the theme**,
+and nothing else:
 
 | | Fullscreen grid tile | Details view / Desktop | Background |
 | --- | --- | --- | --- |
-| Rotating between still covers | works (plugin refreshes the tile) | works | works |
-| Animated GIF / video | achievable, unstable — see below | works | works |
+| Rotating between still covers | works, no theme support | works | works |
+| Animated GIF / video | place `ImageRotater_Cover` | works | works |
 
-Playnite's grid tile renders `Game.CoverImage` through a WPF `Image`, which
-shows a GIF's first frame and cannot decode video at all. Animating one means
-putting a *different renderer* in the tile.
+Playnite's own tile renders `Game.CoverImage` through a WPF `Image`, which shows
+a GIF's first frame and cannot decode video at all, so animating one means a
+different renderer. The plugin's cover control IS that renderer - it carries an
+`Image`, XamlAnimatedGif and a `MediaElement`, and picks between them per pick.
+A theme hosts it; it does not need to build one.
 
-That has been done, and it worked: a `MediaElement` in the tile template, its
-source derived from the tile's own game id, playing smoothly — smoother than
-the GIF path, since it is hardware-assisted H.264 rather than frame-by-frame
-decoding on the UI thread. So this is not impossible, and anyone who reports
-having done it is not mistaken.
+See [Animated covers](#animated-covers-place-the-plugins-control).
 
-It is not shipped because the cost showed up immediately after: Playnite
-crashed once a second element was added per tile, backgrounds turned choppy
-from the extra file copies per rotation, and GIFs — the format most artwork
-actually uses — still would not animate. Details in
-[What theme authors should NOT do](#what-theme-authors-should-not-do).
-
-**A theme author should not have to patch a tile template for this.** Getting
-cover art to rotate and display is the plugin's job, and it already does it
-with no theme support. If you find yourself editing `ListGameItemTemplate.xaml`
-to make covers work, that is a gap in the plugin or in Playnite — not something
-your theme is expected to solve.
+**Do not build a renderer in the theme.** It can be made to work - that has been
+demonstrated - but it duplicates one the plugin already has, and a second media
+pipeline per tile is what crashed Playnite. The details are recorded under
+[What theme authors should NOT do](#what-theme-authors-should-not-do) so nobody
+repeats them.
 
 ---
 
@@ -93,33 +84,77 @@ reconstruction, not rotation.
 workarounds ruled out: [PLAYNITE_ISSUE_DRAFT.md](PLAYNITE_ISSUE_DRAFT.md).
 
 For *still* covers the plugin works around it, so a theme needs to do nothing.
-For *animated* ones a theme-side renderer does work, but costs more than it
-buys — see
-[What theme authors should NOT do](#what-theme-authors-should-not-do).
+
+## Animated covers: place the plugin's control
+
+**One line. Nothing else.**
+
+```xml
+<ContentControl x:Name="ImageRotater_Cover"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"/>
+```
+
+Put that in the game tile template and the plugin renders the cover itself —
+stills, animated GIFs, and MP4/WebM video, whichever the rotation picked. No
+`MediaElement`, no path bindings, no triggers, no converters.
+
+This works because the control's lifecycle inside a Fullscreen tile is healthy,
+which was worth confirming rather than assuming. Instrumented across 67
+instances while scrolling a live grid: every one was constructed, received
+`GameContextChanged` with the correct game, fired `Loaded`, ran its refresh,
+picked artwork and rendered it at full tile size. The earlier belief that these
+controls were built and never loaded came from a faulty measurement.
+
+The control already contains every renderer needed — an `Image` for stills,
+XamlAnimatedGif for GIFs, and a `MediaElement` for video — and switches between
+them per pick, keeping exactly one active so two cannot fight over the same
+tile.
+
+**Hide your own cover element while the plugin has one**, or the two stack:
+
+```xml
+<Condition Binding="{PluginSettings Plugin=ImageRotater, Path=EnableCoverImage}" Value="True"/>
+<Condition Binding="{PluginSettings Plugin=ImageRotater, Path=HasDataCover}" Value="True"/>
+```
+
+`HasDataCover` describes only the SELECTED game, so it cannot gate a whole grid
+— see the warning under [Settings themes can bind](#settings-themes-can-bind).
+The plugin's control renders nothing for a game with no artwork, so in a grid
+the simplest correct answer is to leave your own element alone and let the
+control draw over it only where it has something.
 
 ## What theme authors should NOT do
 
 Everything in this section was built and run against a live Fullscreen grid.
 None of it is hypothetical, and none of it is recommended.
 
-**Do not add a `MediaElement` to your tile template.** It is the only way to
-animate a grid tile from XAML alone, and it genuinely works: video plays in the
-tile, smoothly, and looks better than the GIF path does elsewhere. The problem
-is everything that comes with it.
+**Do not add your own `MediaElement` to a tile template.** It animates — that
+much is real, and video plays smoothly. But it is solving a problem the plugin
+already solves, and it brings its own:
 
-- **It crashes Playnite.** Each realised tile opens its own media file. One
-  element per tile is survivable; a second for a different format is not. A
-  32-bit process sharing its address space with Chromium runs out well before
-  a library finishes scrolling.
+- **It crashes Playnite when it duplicates the plugin's.** Each realised tile
+  opens its own media file, and the plugin's control already has a
+  `MediaElement` of its own. Two media pipelines per tile, in a 32-bit process
+  sharing its address space with Chromium, runs out well before a library
+  finishes scrolling. This is what actually took Playnite down - not the
+  presence of a renderer, but two of them.
 - **It hides the rotation it was meant to show.** A `MediaElement` drawn over
   `PART_ImageCover` covers it for as long as it has a source, so the still
   picks rotate underneath, invisibly. Gating it on "is the current pick a
   video" needs a published boolean, because a WPF `DataTrigger` compares a
   binding to a *literal* and "does this path end in .mp4" cannot be written in
   XAML.
-- **It costs a file copy per rotation.** Serving both a `MediaElement` and an
-  image element means publishing the same pick twice, under two names. On a
-  4.7 MB GIF, on the selection path, that is visible as stutter.
+- **It costs a file copy per rotation.** A theme binds a PATH, so the plugin has
+  to publish the pick as a file - and to serve both a `MediaElement` and an
+  image element, twice, under two names. On a 4.7 MB GIF, on the selection
+  path, that is visible as stutter. A hosted control reads the store directly
+  and needs neither copy.
+
+- **GIFs still will not animate.** A `MediaElement` picks its decoder by file
+  extension, so it needs `current.gif` rather than the extensionless published
+  name - which is why the double publish existed in the first place. The
+  plugin's control uses XamlAnimatedGif and has no such constraint.
 
 **Do not reuse the BackgroundChanger cover pattern for animation.** Aniki hosts
 `BackgroundChanger_PluginCoverImage` as a 1×1 collapsed control and pulls
@@ -145,15 +180,15 @@ can not be null on Trigger"*. Bind the containing `ListBoxItem` instead:
              Value="True">
 ```
 
-**What to do instead:** place `ImageRotater_Cover` if you want the plugin to own
-cover rendering, and otherwise nothing. Still-cover rotation already works with
-no theme support at all.
+**What to do instead:** place `ImageRotater_Cover` and stop there. Still-cover
+rotation already works with no theme support at all; animation needs only that
+one element, because the renderer lives in the plugin where a single instance
+per tile is guaranteed.
 
-Animated grid covers are a different matter. They are reachable from a theme -
-that has been demonstrated, and it looked good - but every version of it traded
-a crash, a regression, or a format that still would not animate for a partial
-result. The stable version needs the upstream notification, at which point the
-plugin can own the renderer and a theme goes back to needing nothing.
+Every problem in this section came from putting the renderer in the THEME. Once
+it lives in the plugin, the crash (two media pipelines per tile), the stutter
+(a published file copy per rotation) and the dead GIFs (a decoder chosen by file
+extension) all stop being problems rather than being worked around.
 
 ### Why theme-side workarounds do not exist
 
@@ -167,16 +202,20 @@ and does not crash, provided the control binds its image path with
 reliably killed Fullscreen: dozens of tiles decoding inside the layout pass, in
 a 32-bit process.
 
-It still does not work, and the failure is more complete than "renders once".
-Instrumented against a live grid: Playnite requested the element **49 times**
-and the control's `Refresh()` ran **zero times**. The controls are constructed
-and then never told anything — no context change, no notification — so they
-never reach the code that would draw a cover at all.
+**It works.** An earlier version of this document claimed the opposite, on the
+strength of a measurement that turned out to be wrong: it reported 49 element
+requests and zero refreshes, and concluded the controls were built and never
+loaded.
 
-This is the difference from BackgroundChanger, whose control shows the artwork
-of the *selected* game and therefore updates whenever selection changes. A
-rotating cover has to change while a tile stays put, which is precisely the
-case the missing notification kills.
+Re-instrumented properly, across 67 instances while scrolling a live grid,
+every one of them: constructed, received `GameContextChanged` with the correct
+game, fired `Loaded` with that context already set, ran its refresh, picked
+artwork, and rendered at full tile size (`234x234, visible=True`). The early
+`0x0, visible=False` entries are the pre-layout pass, not a failure.
+
+So a plugin control in a Fullscreen tile is a working integration point, and it
+is the right one for animated covers - see
+[Animated covers](#animated-covers-place-the-plugins-control).
 
 **A theme-side converter.** WPF triggers compare a binding to a *literal*, and a
 tile's own game id is a binding, so a tile cannot ask "is this published cover
