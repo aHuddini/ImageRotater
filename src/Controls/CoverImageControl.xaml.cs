@@ -100,6 +100,18 @@ namespace ImageRotater.Controls
         // which for a virtualised grid is every time it scrolls into reuse.
         public override void GameContextChanged(Game oldContext, Game newContext)
         {
+            // Tear the previous game's video down BEFORE picking for the new
+            // one.
+            //
+            // A virtualised grid recycles these controls, so this is the moment
+            // one tile stops being Game A and becomes Game B. Refresh below
+            // handles it for a still pick - ShowStill stops the video first -
+            // but a video-to-video recycle went straight to ShowVideo, which
+            // assigns a new Source while the previous media is still open.
+            // Doing it here covers every case rather than the ones that happen
+            // to route through a helper that remembers.
+            StopVideo();
+
             _previousPick = null;
             Refresh();
         }
@@ -584,6 +596,15 @@ namespace ImageRotater.Controls
             }
 
             DisplayVideo.Stop();
+
+            // Close() as well as Stop(), and the difference is not cosmetic.
+            // Stop halts playback but leaves the media open; Close releases it
+            // and the decoder behind it. In a virtualised grid with unfocused
+            // covers animating, that is one held decoder per realised tile, in
+            // a 32-bit process - the difference between "a screenful of videos"
+            // and "every video the user has scrolled past this session".
+            DisplayVideo.Close();
+
             DisplayVideo.Source = null;
             DisplayVideo.Visibility = Visibility.Collapsed;
             _animating = false;

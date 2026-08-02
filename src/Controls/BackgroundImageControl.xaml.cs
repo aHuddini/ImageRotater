@@ -99,6 +99,12 @@ namespace ImageRotater.Controls
         // rotation trigger - v0.1 has no timer.
         public override void GameContextChanged(Game oldContext, Game newContext)
         {
+            // Release the previous game's video before choosing for the new
+            // one - see the note on the cover control's equivalent. A
+            // video-to-video switch otherwise assigns a new Source with the
+            // previous media still open.
+            StopVideo();
+
             // A different game means the previous pick no longer applies.
             _previousPick = null;
             Refresh();
@@ -301,6 +307,14 @@ namespace ImageRotater.Controls
             }
 
             DisplayVideo.Stop();
+
+            // Close as well as Stop: Stop halts playback but leaves the media
+            // and its decoder open. Only one background renders at a time, so
+            // this matters far less here than in a grid of covers - but a
+            // decoder held for the life of the session is still a decoder held
+            // for the life of the session.
+            DisplayVideo.Close();
+
             DisplayVideo.Source = null;
             DisplayVideo.Visibility = Visibility.Collapsed;
         }
