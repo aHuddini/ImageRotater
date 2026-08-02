@@ -1,27 +1,7 @@
 <c:PluginUserControl x:Class="ImageRotater.Controls.CoverImageControl"
                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                     xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK"
-                     Background="Transparent"
-                     Visibility="Collapsed">
-    <!-- Background="Transparent" explicitly, never inherited.
-         PluginUserControl derives from Control, so a theme's implicit Control
-         style can hand it a Background - which on a dark theme is a dark
-         brush. Placed over a tile's own cover, that painted a black rectangle
-         for every game the plugin has no artwork for, appearing and vanishing
-         as the grid virtualised: the black flicker while scrolling past games
-         nobody had set up.
-
-         Visibility="Collapsed" is the other half, and the one that was missed
-         first time round. WPF's default is Visible, so a freshly constructed
-         control was visible from the moment Playnite added it to the tile,
-         through attachment and layout, until Loaded fired and Refresh decided
-         there was nothing to draw. That is a real frame on the FIRST
-         realisation of every tile - which is why fixing only the re-flash on
-         later refreshes made it rarer without ending it.
-
-         The control now starts invisible and is revealed only by a path that
-         is about to draw something (see ShowControl). -->
+                     xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK">
     <Grid x:Name="RootGrid" ClipToBounds="True">
 
         <!-- IsAsync=True is the load-bearing part, not a tuning choice.

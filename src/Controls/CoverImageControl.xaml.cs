@@ -179,7 +179,6 @@ namespace ImageRotater.Controls
 
             _data.ImagePath = path;
 
-            ShowControl();
             DisplayImage.Visibility = Visibility.Visible;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
         }
@@ -330,7 +329,6 @@ namespace ImageRotater.Controls
                     ReleaseAnimationWhenStillArrives();
                 }
 
-                ShowControl();
                 DisplayImage.Visibility = Visibility.Visible;
                 MissingImagePlaceholder.Visibility = Visibility.Collapsed;
             }
@@ -375,34 +373,6 @@ namespace ImageRotater.Controls
             return null;
         }
 
-        // Reveals the control, and is called only by paths that are ABOUT TO
-        // DRAW something.
-        //
-        // Not at the top of Refresh, which is where it was first put so no
-        // drawing path could forget it. That made the control visible before
-        // anyone knew whether this game had artwork, so a game with none went
-        // visible -> laid out -> collapsed, one frame later. Recycled tiles
-        // were already collapsed and never flashed, which is why it showed on
-        // the first pass through a library and not the second.
-        private void ShowControl()
-        {
-            if (Visibility != Visibility.Visible)
-            {
-                Visibility = Visibility.Visible;
-            }
-        }
-
-        // Nothing to show for this game, so the control stands down ENTIRELY -
-        // not just its children.
-        //
-        // Collapsing only the Image left a visible, stretched, empty control
-        // over the tile's own cover. It painted nothing itself, but it still
-        // measured, arranged and composited on every tile realisation, and any
-        // Background a theme's implicit Control style handed it was drawn.
-        // Scrolling past games nobody had set up flickered black.
-        //
-        // A collapsed control is skipped by layout altogether, which is the
-        // correct answer for "this game is not ours".
         private void ShowNothing()
         {
             _data.ImagePath = string.Empty;
@@ -410,7 +380,6 @@ namespace ImageRotater.Controls
             StopVideo();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
-            Visibility = Visibility.Collapsed;
         }
 
         private void ShowPlaceholder()
@@ -418,8 +387,6 @@ namespace ImageRotater.Controls
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
-
-            ShowControl();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Visible;
         }
@@ -467,8 +434,6 @@ namespace ImageRotater.Controls
         {
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
-
-            ShowControl();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 

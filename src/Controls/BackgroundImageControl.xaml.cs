@@ -196,8 +196,6 @@ namespace ImageRotater.Controls
                     DisplayImage.Source = null;
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, new Uri(path));
 
-                    ShowControl();
-
                     DisplayImage.Visibility = Visibility.Visible;
                     MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
@@ -273,7 +271,6 @@ namespace ImageRotater.Controls
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
 
                 DisplayImage.Source = image;
-                ShowControl();
                 DisplayImage.Visibility = Visibility.Visible;
                 MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
@@ -292,38 +289,17 @@ namespace ImageRotater.Controls
         // frames while the behaviour holds a source, so a game with no
         // background would otherwise keep the previous game's GIF running
         // invisibly.
-        // Reveals the control, called only by paths about to DRAW.
-        //
-        // Not at the top of Refresh: that made the control visible before
-        // anyone knew whether this game had artwork, so a game with none went
-        // visible -> laid out -> collapsed one frame later. Recycled tiles were
-        // already collapsed and never flashed, which is why it showed on a
-        // first pass through a library and not the second.
-        private void ShowControl()
-        {
-            if (Visibility != Visibility.Visible)
-            {
-                Visibility = Visibility.Visible;
-            }
-        }
-
-        // Nothing to show, so the control stands down ENTIRELY - see the note
-        // on CoverImageControl.ShowNothing. A visible empty control still
-        // measures, arranges and paints whatever Background a theme's implicit
-        // Control style gave it, over the theme's own artwork.
         private void ShowNothing()
         {
             ClearImage();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
-            Visibility = Visibility.Collapsed;
         }
 
         private void ShowPlaceholder()
         {
             ClearImage();
             DisplayImage.Visibility = Visibility.Collapsed;
-            ShowControl();
             MissingImagePlaceholder.Visibility = Visibility.Visible;
         }
 
@@ -344,7 +320,6 @@ namespace ImageRotater.Controls
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
             DisplayVideo.Source = new Uri(path);
-            ShowControl();
             DisplayVideo.Visibility = Visibility.Visible;
             DisplayVideo.Play();
         }
