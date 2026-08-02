@@ -77,6 +77,12 @@ namespace ImageRotater
         // makes a grid read as noise.
         private SelectionMode coverSelectionMode = SelectionMode.Session;
 
+        // Off by default. Every animated tile decodes frames continuously on
+        // the UI thread, and Playnite is a 32-bit process - a screenful of them
+        // is the pressure that took it down when a theme put its own media
+        // element in every tile.
+        private bool animateUnfocusedCovers = false;
+
         // On by default: it only activates for picks that would otherwise
         // trigger the visible re-fit, and the fill is a soft wash of the image
         // itself rather than bars. Acquiring screen-shaped art in the first
@@ -293,6 +299,23 @@ namespace ImageRotater
         {
             get => coverSelectionMode;
             set { coverSelectionMode = value; OnPropertyChanged(); }
+        }
+
+        // Play animated covers on every tile, not just the selected one.
+        //
+        // BackgroundChanger does this and people prefer the look, so it is
+        // offered - but off by default, because the cost is real. Each
+        // animated tile decodes frames continuously on the UI thread, and
+        // Playnite is a 32-bit process sharing its address space with
+        // Chromium. A library where most games have video covers can exhaust
+        // it while scrolling.
+        //
+        // Only affects tiles that are NOT selected; the selected one always
+        // animates.
+        public bool AnimateUnfocusedCovers
+        {
+            get => animateUnfocusedCovers;
+            set { animateUnfocusedCovers = value; OnPropertyChanged(); }
         }
 
         // Letterbox odd-shaped backgrounds over a blurred fill of themselves.

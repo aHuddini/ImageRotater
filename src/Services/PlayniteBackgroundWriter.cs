@@ -105,11 +105,77 @@ namespace ImageRotater.Services
             return !string.IsNullOrEmpty(artworkId) && _written.Contains(artworkId);
         }
 
+        // Kept so restore can find the preserved copy of a game's original
+        // artwork when the recorded id no longer resolves.
+        private readonly string _imagesRoot;
+
         public PlayniteBackgroundWriter(IPlayniteAPI api, string pluginUserDataPath)
         {
             _api = api;
             _backupPath = Path.Combine(pluginUserDataPath ?? string.Empty, "original-backgrounds.json");
+            _imagesRoot = Path.Combine(pluginUserDataPath ?? string.Empty, "Images");
             Load();
+        }
+
+        // True when an artwork id still points at a real file.
+        //
+        // Playnite reclaims unreferenced library files, so an id recorded
+        // before the plugin replaced the artwork can be dead by the time anyone
+        // restores it.
+        private bool ArtworkIdResolves(string artworkId)
+        {
+            try
+            {
+                string full = _api?.Database?.GetFullFilePath(artworkId);
+                return !string.IsNullOrEmpty(full) && File.Exists(full);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        // Puts the preserved copy of a game's original artwork back into
+        // Playnite's store and returns its new id, or null when there is no
+        // copy to import.
+        //
+        // OriginalArtPreserver writes these as "original_*" in the game's own
+        // folder the first time the plugin touches it, precisely so the user's
+        // artwork survives Playnite reclaiming the file it replaced.
+        private string ReimportPreservedOriginal(Game game, ArtworkKind kind)
+        {
+            try
+            {
+                string folder = Path.Combine(
+                    _imagesRoot,
+                    game.Id.ToString(),
+                    kind == ArtworkKind.Cover ? "covers" : "backgrounds");
+
+                if (!Directory.Exists(folder))
+                {
+                    return null;
+                }
+
+                foreach (string file in Directory.GetFiles(folder, "original_*"))
+                {
+                    string id = ImportFile(file, game.Id);
+
+                    if (!string.IsNullOrEmpty(id))
+                    {
+                        Logger.Info(
+                            $"ImageRotater: restored \"{game.Name}\" {kind} from the preserved copy - "
+                            + "the original Playnite file had been reclaimed");
+                        return id;
+                    }
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, $"ImageRotater: could not re-import the preserved {kind} for \"{game.Name}\"");
+                return null;
+            }
         }
 
         public int BackedUpCount
@@ -258,13 +324,33 @@ namespace ImageRotater.Services
 
                     // Empty means the game originally had no artwork of this
                     // kind, so null is the correct value to put back.
+                    string restoreTo = string.IsNullOrEmpty(entry.Value) ? null : entry.Value;
+
+                    // The recorded id may no longer resolve.
                     //
+                    // Once Game.CoverImage points at plugin artwork the original
+                    // is unreferenced, and Playnite's own library maintenance is
+                    // free to reclaim it. Writing that dead id back gives the
+                    // game a reference to nothing, which renders as missing
+                    // artwork - the user then has to re-add it by hand, which is
+                    // exactly what this whole mechanism exists to prevent.
+                    //
+                    // OriginalArtPreserver keeps a copy in the plugin's own
+                    // folder for precisely this case. Re-import it rather than
+                    // hand back an id that resolves to nothing.
+                    if (restoreTo != null && !ArtworkIdResolves(restoreTo))
+                    {
+                        restoreTo = ReimportPreservedOriginal(game, kind) ?? restoreTo;
+                    }
+
                     // On the UI thread for the same reason as SetArtwork: a
                     // restore that does not notify leaves the grid showing
                     // plugin artwork that is no longer in the database.
+                    string finalValue = restoreTo;
+
                     InvokeOnUi(() =>
                     {
-                        SetCurrent(game, kind, string.IsNullOrEmpty(entry.Value) ? null : entry.Value);
+                        SetCurrent(game, kind, finalValue);
                         _api.Database.Games.Update(game);
                     });
 

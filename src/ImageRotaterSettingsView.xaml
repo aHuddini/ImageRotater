@@ -212,6 +212,16 @@
                                TextWrapping="Wrap"
                                Margin="40,0,0,4"/>
 
+                    <CheckBox Content="Play animated covers on every tile, not just the selected one"
+                              IsChecked="{Binding Settings.AnimateUnfocusedCovers}"
+                              IsEnabled="{Binding Settings.RotateCovers}"
+                              Margin="20,8,0,4"/>
+                    <TextBlock Text="Off by default for a reason: every animated tile decodes frames continuously, and Playnite is a 32-bit process. A library where many games have GIF or video covers can run it out of memory while scrolling. The selected tile always animates either way."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="40,0,0,4"/>
+
                     <Separator Margin="0,16"/>
 
                     <TextBlock Text="When a game has several covers"

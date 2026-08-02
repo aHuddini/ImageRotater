@@ -306,15 +306,22 @@ namespace ImageRotater.Controls
                     return;
                 }
 
-                // Moving artwork plays on the SELECTED tile only.
+                // Moving artwork plays on the SELECTED tile only, unless the
+                // user asks otherwise.
                 //
-                // Everywhere else it renders as its own still frame. A grid
-                // realises a screenful of these at once, and every animated one
-                // decodes continuously on the UI thread in a 32-bit process -
-                // the same pressure that took Playnite down when a theme added
-                // its own media element per tile. One moving cover reads better
-                // than twenty anyway.
-                if (PosterFrame.IsMotion(path) && !IsSelectedTile)
+                // Default is selected-only because a grid realises a screenful
+                // of these at once, and every animated one decodes continuously
+                // on the UI thread in a 32-bit process - the same pressure that
+                // took Playnite down when a theme put its own media element in
+                // every tile.
+                //
+                // But BackgroundChanger plays them everywhere and people like
+                // it, so the restriction is a setting rather than a rule. Left
+                // off by default: a wall of moving thumbnails is the option,
+                // not the expectation, and the failure mode of getting this
+                // wrong is Playnite running out of address space.
+                if (PosterFrame.IsMotion(path) && !IsSelectedTile
+                    && !settings.AnimateUnfocusedCovers)
                 {
                     string still = PosterFrame.For(path);
 

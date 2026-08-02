@@ -758,6 +758,38 @@ namespace ImageRotater
             }
 
             _slideshowGame = null;
+
+            // Put every game's own artwork back before Playnite closes.
+            //
+            // Playnite gives an extension no uninstall or disable hook, and a
+            // disabled plugin does not load at all - so this is the only moment
+            // the plugin is still running and can undo what it wrote. Without
+            // it, disabling the plugin left Game.CoverImage and
+            // BackgroundImage pointing at plugin artwork, and users had to
+            // re-add their own by hand.
+            //
+            // Rotation re-applies on the next launch, so a user who keeps the
+            // plugin enabled sees no difference. What changes is that the
+            // database is always left in a state that survives the plugin
+            // going away.
+            //
+            // A crash still skips this, which is why the restore itself was
+            // made robust: it re-imports the preserved copy when the recorded
+            // id no longer resolves, rather than writing back a dead
+            // reference.
+            try
+            {
+                int restored = _writer.RestoreAll();
+
+                if (restored > 0)
+                {
+                    _fileLogger?.Log($"restored {restored} game(s) to their own artwork on shutdown");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "ImageRotater: could not restore artwork on shutdown");
+            }
         }
     }
 }
