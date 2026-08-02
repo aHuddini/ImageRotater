@@ -77,8 +77,19 @@ namespace ImageRotater.Services
 
                 string label = kind == ArtworkKind.Cover ? "covers" : "backgrounds";
                 window.Title = $"ImageRotater - search {label}: {game.Name}";
-                window.Width = 1000;
-                window.Height = 640;
+                // Bigger in Fullscreen, where this is read from a sofa and the
+                // desktop size leaves most of a TV unused. Clamped to the
+                // screen so it cannot open larger than the display.
+                bool fullscreen = _api.ApplicationInfo.Mode == ApplicationMode.Fullscreen;
+
+                window.Width = fullscreen
+                    ? Math.Min(1600, SystemParameters.PrimaryScreenWidth * 0.92)
+                    : 1000;
+
+                window.Height = fullscreen
+                    ? Math.Min(950, SystemParameters.PrimaryScreenHeight * 0.9)
+                    : 640;
+
                 window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
                 window.Content = new Controls.SteamGridDbSearchView(
                     _api, _steamGridDb, _downloader, game.Id, game.Name, kind);

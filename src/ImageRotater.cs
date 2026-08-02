@@ -193,6 +193,25 @@ namespace ImageRotater
 
         // Write mode has no control to react to selection, so the plugin drives
         // it from the selection event instead.
+        // B closes the search dialog.
+        //
+        // Playnite turns the rest of the pad into real key messages posted to
+        // the active window - D-pad becomes the arrow keys, A becomes Enter -
+        // so navigating and picking artwork needs no code from us at all. B is
+        // the exception: Playnite maps it to nothing, and a source comment in
+        // its own input handling concedes nobody remembers why. Without this a
+        // controller user can open the dialog and then has no way out of it.
+        //
+        // Nothing happens when no dialog is open, so this cannot interfere with
+        // B anywhere else in Playnite.
+        public override void OnControllerButtonStateChanged(OnControllerButtonStateChangedArgs args)
+        {
+            if (args?.Button == ControllerInput.B && args.State == ControllerInputState.Released)
+            {
+                Controls.SteamGridDbSearchView.CloseOpenDialog();
+            }
+        }
+
         public override void OnGameSelected(OnGameSelectedEventArgs args)
         {
             Game selected = args?.NewValue?.FirstOrDefault();

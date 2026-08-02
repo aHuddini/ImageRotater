@@ -27,6 +27,35 @@ namespace ImageRotater.Controls
         // Peer source to SteamGridDB, used when the checkbox is ticked.
         private readonly WebImageSearch _webSearch;
 
+        // Result tile geometry, read by the tile template through a
+        // RelativeSource binding - the DataContext there is one search result,
+        // so these cannot live on the view model.
+        //
+        // Dependency properties rather than plain ones because the template
+        // binds them; a CLR property with no change notification would work
+        // here only by accident of being set before the first measure.
+        public static readonly DependencyProperty TileWidthProperty =
+            DependencyProperty.Register(
+                nameof(TileWidth), typeof(double), typeof(SteamGridDbSearchView),
+                new PropertyMetadata(240.0));
+
+        public static readonly DependencyProperty ThumbnailHeightProperty =
+            DependencyProperty.Register(
+                nameof(ThumbnailHeight), typeof(double), typeof(SteamGridDbSearchView),
+                new PropertyMetadata(112.0));
+
+        public double TileWidth
+        {
+            get { return (double)GetValue(TileWidthProperty); }
+            set { SetValue(TileWidthProperty, value); }
+        }
+
+        public double ThumbnailHeight
+        {
+            get { return (double)GetValue(ThumbnailHeightProperty); }
+            set { SetValue(ThumbnailHeightProperty, value); }
+        }
+
         public SteamGridDbSearchView(
             IPlayniteAPI api,
             ISteamGridDbClient client,
@@ -48,9 +77,98 @@ namespace ImageRotater.Controls
 
             SearchBox.Text = gameName ?? string.Empty;
 
+            // Fullscreen is read from across a room, so the tiles grow and the
+            // filter column gets out of the way. Desktop keeps the sizes that
+            // suit a monitor at arm's length.
+            if (api?.ApplicationInfo?.Mode == ApplicationMode.Fullscreen)
+            {
+                TileWidth = 340;
+                ThumbnailHeight = 160;
+                FiltersColumn.Width = new GridLength(0);
+                FilterToggleRow.Visibility = Visibility.Visible;
+            }
+
             // Search straight away - the user opened this from a specific game,
             // so making them press Search first is a pointless extra step.
-            Loaded += async (s, e) => await RunSearch();
+            //
+            // Focus goes to the RESULTS, not the search box. The box is already
+            // filled with the game's name and the search runs on its own, so a
+            // controller user wants to be browsing results immediately - and
+            // landing in a text box with a controller means an on-screen
+            // keyboard nobody asked for.
+            Loaded += async (s, e) =>
+            {
+                _open = this;
+                await RunSearch();
+                FocusFirstResult();
+            };
+
+            // Cleared on unload, so a controller press after the dialog has
+            // gone cannot reach a dead window.
+            Unloaded += (s, e) =>
+            {
+                if (ReferenceEquals(_open, this))
+                {
+                    _open = null;
+                }
+            };
+        }
+
+        // Puts keyboard focus on the first result tile, so D-pad navigation has
+        // somewhere to start. WPF will not move focus from nowhere, so without
+        // this the first press of a direction does nothing at all.
+        private void FocusFirstResult()
+        {
+            try
+            {
+                ResultsList.UpdateLayout();
+
+                var first = FindFirstFocusable(ResultsList);
+
+                if (first != null)
+                {
+                    first.Focus();
+                    return;
+                }
+
+                // No results yet - the search may have found nothing. Put focus
+                // somewhere reachable rather than leaving the window with none.
+                SearchButton.Focus();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not set initial focus in the search dialog");
+            }
+        }
+
+        private static System.Windows.Controls.Primitives.ToggleButton FindFirstFocusable(
+            DependencyObject root)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            int count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+
+            for (int i = 0; i < count; i++)
+            {
+                DependencyObject child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+
+                var toggle = child as System.Windows.Controls.Primitives.ToggleButton;
+                if (toggle != null && toggle.Focusable && toggle.IsVisible)
+                {
+                    return toggle;
+                }
+
+                var found = FindFirstFocusable(child);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
         }
 
         private async Task RunSearch()
@@ -111,6 +229,84 @@ namespace ImageRotater.Controls
             if (e.Key == Key.Enter)
             {
                 await RunSearch();
+            }
+        }
+
+        // Shows or hides the filter column.
+        //
+        // Only reachable in Fullscreen, where the column starts collapsed
+        // because it would otherwise take a third of a TV for controls a
+        // controller user touches rarely.
+        private void FilterToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            bool show = FilterToggleRow.IsChecked == true;
+
+            FiltersColumn.Width = show ? new GridLength(260) : new GridLength(0);
+        }
+
+        // Escape closes, and so does the controller's B.
+        //
+        // Playnite synthesises real key messages from the pad - D-pad becomes
+        // the arrow keys and A becomes Enter, which is why navigation and
+        // activation need no code at all. B is the exception: Playnite maps it
+        // to nothing (a comment in its own source admits nobody remembers why),
+        // so a dialog that does not handle it strands a controller user with no
+        // way out.
+        //
+        // OnPreviewKeyDown rather than the KeyDown event, so this still fires
+        // when focus is inside a child that handles keys itself - the search
+        // box swallows Escape otherwise.
+        protected override void OnPreviewKeyDown(KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                CloseWindow();
+                return;
+            }
+
+            base.OnPreviewKeyDown(e);
+        }
+
+        // Closes whichever search dialog is currently open.
+        //
+        // Static because the controller event arrives at the PLUGIN, which has
+        // no reference to a dialog it did not construct. B is the one button
+        // Playnite does not synthesise a key for, so this is the only route
+        // from "user pressed B" to "the dialog closes".
+        public static void CloseOpenDialog()
+        {
+            SteamGridDbSearchView open = _open;
+
+            if (open == null)
+            {
+                return;
+            }
+
+            try
+            {
+                open.Dispatcher.Invoke(() => open.CloseWindow());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not close the search dialog from the controller");
+            }
+        }
+
+        // The dialog is modal and there is only ever one, so a single reference
+        // is enough - and it is cleared on unload so a closed dialog cannot be
+        // told to close again.
+        private static SteamGridDbSearchView _open;
+
+        private void CloseWindow()
+        {
+            try
+            {
+                Window.GetWindow(this)?.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not close the search dialog");
             }
         }
 

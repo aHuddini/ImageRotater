@@ -48,6 +48,18 @@
                     MinWidth="90"
                     Margin="8,0,0,0"
                     Click="SearchButton_Click"/>
+
+            <!-- Fullscreen only. The filter column starts collapsed there, so
+                 this is how a controller user gets it back without a mouse. -->
+            <ToggleButton x:Name="FilterToggleRow"
+                          Content="Filters"
+                          DockPanel.Dock="Right"
+                          MinWidth="90"
+                          Margin="8,0,0,0"
+                          Visibility="Collapsed"
+                          Checked="FilterToggle_Changed"
+                          Unchecked="FilterToggle_Changed"/>
+
             <TextBox x:Name="SearchBox"
                      VerticalContentAlignment="Center"
                      Padding="4"
@@ -57,7 +69,10 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220"/>
+                <!-- Collapsed to zero in Fullscreen, where the filter column
+                     would eat a third of a TV screen for controls a controller
+                     user rarely touches. The Filters button restores it. -->
+                <ColumnDefinition x:Name="FiltersColumn" Width="220"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -134,7 +149,11 @@
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <!-- Selection is the tiles' own toggle state, so the ListBox must
                      not also track a selection - two competing highlights, and a
-                     click would mean both "toggle this" and "select this". -->
+                     click would mean both "toggle this" and "select this".
+                     The container therefore stays unfocusable and untemplated;
+                     the ToggleButton inside each tile is what takes focus, which
+                     is what makes D-pad navigation land on something that can
+                     actually be activated. -->
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Focusable" Value="False"/>
@@ -170,8 +189,14 @@
                                       Padding="0">
                             <ToggleButton.Template>
                                 <ControlTemplate TargetType="ToggleButton">
+                                    <!-- Tile width comes from the view, not a
+                                         literal: Fullscreen is read from a sofa
+                                         and 240px of artwork that is comfortable
+                                         on a monitor is a postage stamp on a TV.
+                                         Set once in code from the application
+                                         mode. -->
                                     <Border x:Name="Frame"
-                                            Width="240"
+                                            Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             Margin="6"
                                             Padding="6"
                                             CornerRadius="3"
@@ -192,7 +217,7 @@
                                                      dialog would not open at all. Code-behind
                                                      resolves in the LoadFrom context instead, which
                                                      is how the cover control has always done it. -->
-                                                <Image Height="112"
+                                                <Image Height="{Binding ThumbnailHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                        Stretch="UniformToFill"
                                                        Source="{Binding ThumbnailUrl}"
                                                        Loaded="ResultImage_Loaded"/>
@@ -248,6 +273,20 @@
                                         </Trigger>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter TargetName="Frame" Property="Background" Value="#22FFFFFF"/>
+                                        </Trigger>
+
+                                        <!-- Where the D-pad is.
+                                             Without this a controller user has no
+                                             idea which tile Enter would activate -
+                                             the tick marks what is SELECTED, which
+                                             is a different question. Brighter than
+                                             the hover wash so the two read apart
+                                             when a mouse and a pad are both in
+                                             use. -->
+                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                            <Setter TargetName="Frame" Property="Background" Value="#33FFFFFF"/>
+                                            <Setter TargetName="Frame" Property="BorderBrush"
+                                                    Value="{DynamicResource TextBrush}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
