@@ -125,11 +125,77 @@ namespace ImageRotater.Controls
             }
         }
 
+        // Which game is selected right now, so only that tile animates.
+        //
+        // A grid realises a screenful of these at once, and every one holding
+        // an animated cover decodes frames continuously on the UI thread - in a
+        // 32-bit process shared with Chromium. Dozens of simultaneous decoders
+        // is the same pressure that took Playnite down during the theme
+        // experiments, and it buys nothing: a wall of moving thumbnails is
+        // harder to read than one.
+        //
+        // Static and set by the plugin, because a control has no way to ask
+        // whether its own tile is selected - GameListItem has no IsSelected,
+        // and the containing ListBoxItem is not reachable from the control's
+        // own code without walking the visual tree on every refresh.
+        private static Guid _selectedGame;
+
+        public static void NotifySelectionChanged(Guid gameId)
+        {
+            if (_selectedGame == gameId)
+            {
+                return;
+            }
+
+            _selectedGame = gameId;
+
+            // Both the tile gaining selection and the one losing it need to
+            // re-decide, and neither gets a context change for it.
+            Action<Guid> handler = ArtworkRotated;
+
+            if (handler != null)
+            {
+                handler(gameId);
+            }
+        }
+
+        private bool IsSelectedTile
+        {
+            get { return GameContext != null && GameContext.Id == _selectedGame; }
+        }
+
+        // True while this tile is actually decoding something. Lets a tile that
+        // loses selection recognise it has work to stop, since the announcement
+        // names the arriving game rather than this one.
+        private bool _animating;
+
+        // Renders a motion pick as its own still frame, for a tile that is not
+        // selected. Same channel a static pick uses, so nothing else changes.
+        private void ShowStill(string path)
+        {
+            StopVideo();
+            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+            _animating = false;
+
+            _data.ImagePath = path;
+
+            DisplayImage.Visibility = Visibility.Visible;
+            MissingImagePlaceholder.Visibility = Visibility.Collapsed;
+        }
+
         private void OnArtworkRotated(Guid gameId)
         {
-            // Only this tile's own game. A grid raises this for one game while
-            // dozens of controls listen.
-            if (GameContext == null || GameContext.Id != gameId)
+            // Normally only this tile's own game - a grid raises this for one
+            // game while dozens of controls listen.
+            //
+            // The exception is a tile that is currently ANIMATING but is no
+            // longer the selected one. Selection moving away is announced
+            // against the ARRIVING game, so the departing tile would never hear
+            // it and would keep decoding frames forever.
+            bool mine = GameContext != null && GameContext.Id == gameId;
+            bool mustStandDown = _animating && !IsSelectedTile;
+
+            if (!mine && !mustStandDown)
             {
                 return;
             }
@@ -193,6 +259,31 @@ namespace ImageRotater.Controls
                     return;
                 }
 
+                // Moving artwork plays on the SELECTED tile only.
+                //
+                // Everywhere else it renders as its own still frame. A grid
+                // realises a screenful of these at once, and every animated one
+                // decodes continuously on the UI thread in a 32-bit process -
+                // the same pressure that took Playnite down when a theme added
+                // its own media element per tile. One moving cover reads better
+                // than twenty anyway.
+                if (PosterFrame.IsMotion(path) && !IsSelectedTile)
+                {
+                    string still = PosterFrame.For(path);
+
+                    if (!string.IsNullOrEmpty(still))
+                    {
+                        ShowStill(still);
+                        return;
+                    }
+
+                    // No still could be extracted - video, whose container GDI+
+                    // cannot open. Render nothing rather than start playback on
+                    // an unselected tile.
+                    ShowNothing();
+                    return;
+                }
+
                 // Video is a third channel, and a different renderer: WPF's
                 // imaging stack cannot decode a container, so this cannot be a
                 // mode of the Image.
@@ -216,6 +307,7 @@ namespace ImageRotater.Controls
                     // first would blank the tile until the animation loaded.
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, new Uri(path));
                     _data.ImagePath = string.Empty;
+                    _animating = true;
                 }
                 else
                 {
@@ -233,6 +325,7 @@ namespace ImageRotater.Controls
                     // before, so the fix has to work with the delay rather than
                     // remove it.
                     _data.ImagePath = path;
+                    _animating = false;
                     ReleaseAnimationWhenStillArrives();
                 }
 
@@ -347,6 +440,7 @@ namespace ImageRotater.Controls
             DisplayVideo.Source = new Uri(path);
             DisplayVideo.Visibility = Visibility.Visible;
             DisplayVideo.Play();
+            _animating = true;
         }
 
         // Stop AND drop the source. Stop alone keeps the file open, and
@@ -362,6 +456,7 @@ namespace ImageRotater.Controls
             DisplayVideo.Stop();
             DisplayVideo.Source = null;
             DisplayVideo.Visibility = Visibility.Collapsed;
+            _animating = false;
         }
 
         // Loop: artwork clips are short and meant to repeat, and MediaElement

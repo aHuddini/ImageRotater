@@ -233,6 +233,13 @@ namespace ImageRotater
             // overtaken and decline to commit.
             _selectionGeneration++;
 
+            // Only the selected tile animates. Every other one showing motion
+            // artwork renders its still frame instead - a screenful of tiles
+            // each decoding frames on the UI thread, in a 32-bit process, is
+            // the pressure that took Playnite down when a theme put its own
+            // media element in every tile.
+            CoverImageControl.NotifySelectionChanged(selected?.Id ?? Guid.Empty);
+
             if (selected != null)
             {
                 // Tell themes whether this game has a plugin cover to show, so
