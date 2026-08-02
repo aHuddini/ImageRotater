@@ -80,6 +80,35 @@ namespace ImageRotater.Tests.Services
                 "a casing difference must not make our own rotation look like the user's art");
         }
 
+        // The record has to SURVIVE A RESTART, and an earlier version did not.
+        //
+        // The reasoning for keeping it in memory only was that the ids are
+        // transient because "the current value is rewritten before any preserve
+        // can run". That is false. On restart the set starts empty while
+        // Game.CoverImage still holds an id this plugin wrote last session, and
+        // Preserve runs on the FIRST selection - before any rotation rewrites
+        // it. So the plugin failed to recognise its own artwork and copied it
+        // in as a fresh "original_" candidate, once per restart. On a game
+        // whose pick was animated that handed rotation a still frame of its own
+        // GIF to alternate with, which reads as the animation breaking.
+        [Test]
+        public void WrittenIdsSurviveARestart()
+        {
+            var written = typeof(PlayniteBackgroundWriter).GetMethod(
+                "NoteWritten",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            written.Invoke(_writer, new object[] { "playnite-id-from-last-session" });
+
+            // A second writer over the same directory is what the next Playnite
+            // launch constructs.
+            var afterRestart = new PlayniteBackgroundWriter(null, _dir);
+
+            Assert.IsTrue(afterRestart.WroteArtworkId("playnite-id-from-last-session"),
+                "the plugin must still recognise its own artwork after a restart, or it "
+                + "preserves it as if it were the user's and gains a candidate every launch");
+        }
+
         // Every rotation imports a fresh id and deletes the previous copy, so
         // the record has to hold more than the latest one - a preserve can run
         // against an id written a rotation or two ago.

@@ -31,6 +31,10 @@ namespace ImageRotater.Services
         {
             public Dictionary<string, string> Originals { get; set; }
             public Dictionary<string, string> Imported { get; set; }
+
+            // Artwork ids this plugin wrote, so a restart can still tell them
+            // from the user's own art. See _written.
+            public List<string> Written { get; set; }
         }
 
         private readonly IPlayniteAPI _api;
@@ -67,19 +71,32 @@ namespace ImageRotater.Services
         // adding a candidate per restart and, for an animated pick, quietly
         // giving rotation a still to land on instead.
         //
-        // Not persisted, deliberately: the ids are transient (a fresh import
-        // per rotation, the previous one deleted right after), so a set carried
-        // across restarts would be mostly dead entries. What matters is the
-        // CURRENT value, and that is rewritten before any preserve can run.
-        private readonly HashSet<string> _written =
+        // PERSISTED, and an earlier version of this comment argued the opposite
+        // on reasoning that was simply wrong. It claimed the ids were transient
+        // because "the current value is rewritten before any preserve can run".
+        //
+        // It is not. On restart the set starts empty while Game.CoverImage
+        // still holds an id THIS PLUGIN wrote last session, and Preserve runs
+        // on the first selection - before any rotation rewrites anything. So it
+        // saw our own artwork, failed to recognise it, and copied it in as a
+        // fresh "original_" candidate. One per restart, and for a game whose
+        // pick was animated that quietly handed rotation a still frame of its
+        // own GIF to alternate with.
+        //
+        // Bounded by pruning on save rather than by forgetting: only ids still
+        // referenced by a game survive, so this cannot grow without limit.
+        private HashSet<string> _written =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         private void NoteWritten(string artworkId)
         {
-            if (!string.IsNullOrEmpty(artworkId))
+            if (string.IsNullOrEmpty(artworkId))
             {
-                _written.Add(artworkId);
+                return;
             }
+
+            _written.Add(artworkId);
+            Save();
         }
 
         // True when this artwork id is one we wrote rather than the user's own.
@@ -475,12 +492,16 @@ namespace ImageRotater.Services
                 {
                     _originals = state.Originals;
                     _imported = state.Imported ?? new Dictionary<string, string>();
+                    _written = state.Written != null
+                        ? new HashSet<string>(state.Written, StringComparer.OrdinalIgnoreCase)
+                        : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     return;
                 }
 
                 _originals = JsonConvert.DeserializeObject<Dictionary<string, string>>(json)
                     ?? new Dictionary<string, string>();
                 _imported = new Dictionary<string, string>();
+                _written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             }
             catch (Exception ex)
             {
@@ -489,6 +510,7 @@ namespace ImageRotater.Services
                 Logger.Error(ex, "ImageRotater: could not read the original-background backup. Restore will not be available.");
                 _originals = new Dictionary<string, string>();
                 _imported = new Dictionary<string, string>();
+                _written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             }
         }
 
@@ -507,7 +529,8 @@ namespace ImageRotater.Services
                 var state = new WriterState
                 {
                     Originals = _originals,
-                    Imported = _imported
+                    Imported = _imported,
+                    Written = new List<string>(_written)
                 };
 
                 string temp = _backupPath + ".tmp";
