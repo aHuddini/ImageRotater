@@ -500,14 +500,55 @@ namespace ImageRotater.Controls
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6)
             };
+            // Three routes, because no single renderer covers what turns up
+            // here.
+            //
+            // A GIF plays through XamlAnimatedGif. Anything else animated -
+            // which on SteamGridDB means WebP with a WebM thumbnail - has to be
+            // converted first, since WPF can decode neither and XamlAnimatedGif
+            // handles only GIF. A still just loads.
+            System.Windows.Controls.MediaElement video = null;
+
             if (item.IsGif && item.UrlUri != null)
             {
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, item.UrlUri);
             }
+            else if (item.IsAnimated && PreviewCache.IsAvailable)
+            {
+                video = new System.Windows.Controls.MediaElement
+                {
+                    LoadedBehavior = System.Windows.Controls.MediaState.Manual,
+                    IsMuted = true,
+                    Stretch = System.Windows.Media.Stretch.Uniform,
+                    Margin = new Thickness(6)
+                };
+
+                // Loops, since these are short clips and a preview that plays
+                // once then freezes looks broken.
+                video.MediaEnded += (s, e) =>
+                {
+                    try
+                    {
+                        video.Position = TimeSpan.Zero;
+                        video.Play();
+                    }
+                    catch (Exception)
+                    {
+                    }
+                };
+            }
             else
             {
-                image.Source = new System.Windows.Media.Imaging.BitmapImage(
-                    new Uri(item.Url, UriKind.Absolute));
+                try
+                {
+                    image.Source = new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri(item.Url, UriKind.Absolute));
+                }
+                catch (Exception)
+                {
+                    // WPF has no WebP decoder, so a still WebP throws here.
+                    // The caption still reports what it is.
+                }
             }
 
             // The true dimensions matter more now that the preview is scaled -
@@ -525,14 +566,56 @@ namespace ImageRotater.Controls
             var layout = new System.Windows.Controls.DockPanel();
             System.Windows.Controls.DockPanel.SetDock(status, System.Windows.Controls.Dock.Bottom);
             layout.Children.Add(status);
-            layout.Children.Add(image);
+            layout.Children.Add(video ?? (UIElement)image);
 
             window.Content = layout;
 
+            // Converting takes a second or two, so it happens after the window
+            // is up rather than freezing the click that opened it.
+            if (video != null)
+            {
+                string sourceUrl = item.MotionPreviewUrl;
+                status.Text = "Preparing preview...";
+
+                System.Threading.Tasks.Task.Run(() => PreviewCache.GetPlayableCopy(sourceUrl))
+                    .ContinueWith(t =>
+                    {
+                        string playable = t.Result;
+
+                        if (string.IsNullOrEmpty(playable))
+                        {
+                            status.Text = $"{item.Dimensions}   {item.Mime}   (no preview available)";
+                            return;
+                        }
+
+                        video.Source = new Uri(playable);
+                        video.Play();
+                        status.Text = $"{item.Dimensions}   {item.Mime}";
+                    },
+                    System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+            }
+
             // Release the animation on close, or a GIF keeps decoding for the
             // life of the session behind a window nobody can see.
+            // Both renderers released, or a preview keeps decoding for the rest
+            // of the session behind a closed window.
             window.Closed += (s, e) =>
+            {
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, null);
+
+                if (video != null)
+                {
+                    try
+                    {
+                        video.Stop();
+                        video.Close();
+                        video.Source = null;
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+            };
 
             window.ShowDialog();
         }

@@ -174,7 +174,20 @@ namespace ImageRotater.Tests.Services
             var artwork = new List<SteamGridDbArtwork>
             {
                 Art(1, mime: "image/jpeg"),
-                Art(2, mime: "image/webp"),
+
+                // Animated WebP is identified by its .webm THUMBNAIL, not its
+                // MIME: SteamGridDB reports animated and still WebP alike as
+                // "image/webp", so matching the MIME badged every static WebP
+                // cover as animated and hid it from an unfiltered search.
+                new SteamGridDbArtwork
+                {
+                    Id = 2,
+                    Mime = "image/webp",
+                    ThumbnailUrl = "https://cdn.steamgriddb.com/mb/abc.webm",
+                    Width = 1920,
+                    Height = 1080
+                },
+
                 Art(3, mime: "image/apng")
             };
 
@@ -182,6 +195,30 @@ namespace ImageRotater.Tests.Services
 
             Assert.AreEqual(1, result.Count);
             Assert.AreEqual(1, result[0].Id);
+        }
+
+        // The other half of that rule: a STILL WebP must survive the default
+        // filter. Treating every image/webp as animated hid perfectly ordinary
+        // covers from a search that had not asked for animation.
+        [Test]
+        public void Apply_KeepsStillWebpByDefault()
+        {
+            var artwork = new List<SteamGridDbArtwork>
+            {
+                new SteamGridDbArtwork
+                {
+                    Id = 1,
+                    Mime = "image/webp",
+                    ThumbnailUrl = "https://cdn.steamgriddb.com/thumb/abc.jpg",
+                    Width = 600,
+                    Height = 900
+                }
+            };
+
+            var result = ArtworkFilter.Apply(artwork, new ArtworkFilterState());
+
+            Assert.AreEqual(1, result.Count,
+                "a still WebP is not animated and must not be filtered out as if it were");
         }
 
         [Test]

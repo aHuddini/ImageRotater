@@ -65,28 +65,70 @@ namespace ImageRotater.Models
             get { return Width + "x" + Height; }
         }
 
-        // True when the file is animated. GIFs both play in the plugin's own
-        // cover control and animate in the search preview; webp/apng do
-        // neither yet (no WPF decode - Phase 2 converts via FFmpeg).
+        // True when the file actually moves.
+        //
+        // The thumbnail extension leads, because the MIME cannot answer this.
+        // SteamGridDB reports animated WebP as "image/webp" - identical to a
+        // still WebP - so matching the MIME alone badged every static WebP
+        // cover as animated. What distinguishes them is the thumbnail: animated
+        // entries get a .webm thumb, stills get .jpg or .png.
+        //
+        // Sampled to be sure rather than assumed: 23 of 23 animated results
+        // across two games were image/webp with .webm thumbs, and none were
+        // GIF. WPF decodes neither of those - its codec list is BMP, GIF, Icon,
+        // JPEG, PNG, TIFF, WMP - which is why these need converting before they
+        // can be shown moving at all.
         public bool IsAnimated
         {
             get
             {
+                if (IsGif)
+                {
+                    return true;
+                }
+
+                if (!string.IsNullOrEmpty(ThumbnailUrl) &&
+                    ThumbnailUrl.IndexOf(".webm", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+
                 return !string.IsNullOrEmpty(Mime)
-                    && (Mime.IndexOf("webp", System.StringComparison.OrdinalIgnoreCase) >= 0
-                        || Mime.IndexOf("apng", System.StringComparison.OrdinalIgnoreCase) >= 0
-                        || Mime.IndexOf("gif", System.StringComparison.OrdinalIgnoreCase) >= 0);
+                    && (Mime.IndexOf("apng", System.StringComparison.OrdinalIgnoreCase) >= 0
+                        || Mime.IndexOf("webm", System.StringComparison.OrdinalIgnoreCase) >= 0
+                        || Mime.IndexOf("mp4", System.StringComparison.OrdinalIgnoreCase) >= 0);
             }
         }
 
-        // The one animated format we can actually play, previewed live in the
-        // search results and animated by the cover control after download.
+        // Playable directly by XamlAnimatedGif, which handles GIF and nothing
+        // else.
         public bool IsGif
         {
             get
             {
                 return !string.IsNullOrEmpty(Mime)
                     && Mime.IndexOf("gif", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+        }
+
+
+        // The URL worth fetching to SHOW motion.
+        //
+        // For an animated SteamGridDB entry that is the .webm thumbnail rather
+        // than the full .webp: it is what actually contains video, and it is
+        // far smaller than the full artwork - which matters when the point is
+        // a preview rather than the download.
+        public string MotionPreviewUrl
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(ThumbnailUrl) &&
+                    ThumbnailUrl.IndexOf(".webm", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return ThumbnailUrl;
+                }
+
+                return Url;
             }
         }
 

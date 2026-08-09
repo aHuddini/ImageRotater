@@ -243,14 +243,20 @@
 
                                                 <!-- Badge so animated results are identifiable at a
                                                      glance even before the frames arrive. -->
-                                                <Border Visibility="{Binding IsGif, Converter={StaticResource BoolToVisibility}}"
+                                                <!-- Badged for ANY animated format, not just GIF.
+                                                     Every animated result SteamGridDB returns is
+                                                     WebP with a WebM thumbnail, so a GIF-only badge
+                                                     marked almost nothing - and WPF can decode
+                                                     neither, so those tiles were unlabelled AND
+                                                     frequently blank. -->
+                                                <Border Visibility="{Binding IsAnimated, Converter={StaticResource BoolToVisibility}}"
                                                         HorizontalAlignment="Left"
                                                         VerticalAlignment="Top"
                                                         Margin="4"
                                                         Padding="4,1"
                                                         CornerRadius="3"
                                                         Background="#B0000000">
-                                                    <TextBlock Text="GIF"
+                                                    <TextBlock Text="ANIMATED"
                                                                FontSize="10"
                                                                FontWeight="Bold"
                                                                Foreground="White"/>

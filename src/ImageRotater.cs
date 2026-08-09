@@ -915,6 +915,10 @@ namespace ImageRotater
 
             _slideshowGame = null;
 
+            // Previews are of artwork the user did NOT download, so none of it
+            // should outlive the session.
+            Services.PreviewCache.Clear();
+
             // Put every game's own artwork back before Playnite closes.
             //
             // Playnite gives an extension no uninstall or disable hook, and a
