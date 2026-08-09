@@ -583,6 +583,15 @@ namespace ImageRotater.Controls
             DisplayVideo.Visibility = Visibility.Visible;
             DisplayVideo.Play();
             _animating = true;
+
+            // Start somewhere other than the beginning.
+            //
+            // Every tile otherwise opens on the same first second of its clip,
+            // and revisiting a game replays the same opening frames - which
+            // reads as the video being stuck rather than looping. Applied once
+            // the duration is known, since it is not available until the media
+            // opens.
+            _startAtRandomPoint = true;
         }
 
         // Stop AND drop the source. Stop alone keeps the file open, and
@@ -612,6 +621,57 @@ namespace ImageRotater.Controls
 
         // Loop: artwork clips are short and meant to repeat, and MediaElement
         // has no repeat property of its own.
+        // Set when playback starts, consumed when the media reports its length.
+        private bool _startAtRandomPoint;
+
+        // One generator for every control. Constructing Random per call seeds
+        // from the clock, and a screenful of tiles opening in the same
+        // millisecond would all pick the same "random" offset.
+        private static readonly Random StartPoint = new Random();
+
+        // Seeks to a random point once the duration is known.
+        //
+        // Duration is not available until the media opens, so this cannot be
+        // done where Play() is called. Skips the last quarter, or a clip could
+        // open a moment before it loops - which looks like it failed to play.
+        private void DisplayVideo_MediaOpened(object sender, RoutedEventArgs e)
+        {
+            if (!_startAtRandomPoint)
+            {
+                return;
+            }
+
+            _startAtRandomPoint = false;
+
+            try
+            {
+                if (!DisplayVideo.NaturalDuration.HasTimeSpan)
+                {
+                    return;
+                }
+
+                double seconds = DisplayVideo.NaturalDuration.TimeSpan.TotalSeconds;
+
+                // Too short to be worth seeking into.
+                if (seconds < 2.0)
+                {
+                    return;
+                }
+
+                double offset;
+                lock (StartPoint)
+                {
+                    offset = StartPoint.NextDouble() * (seconds * 0.75);
+                }
+
+                DisplayVideo.Position = TimeSpan.FromSeconds(offset);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not set a random video start point");
+            }
+        }
+
         private void DisplayVideo_MediaEnded(object sender, RoutedEventArgs e)
         {
             try

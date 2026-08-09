@@ -461,24 +461,45 @@ namespace ImageRotater.Controls
             window.Title = $"Preview - {item.Dimensions}"
                 + (string.IsNullOrEmpty(item.Style) ? string.Empty : $" ({item.Style})");
 
-            // Sized to the screen rather than the image: artwork is routinely
-            // larger than the display, and a window sized to a 4000px source
-            // would open mostly offscreen.
-            window.Width = Math.Min(1400, SystemParameters.PrimaryScreenWidth * 0.9);
-            window.Height = Math.Min(900, SystemParameters.PrimaryScreenHeight * 0.9);
+            // Sized to the artwork's own SHAPE, not to the screen.
+            //
+            // A fixed 1400x900 was nearly the whole display for something that
+            // only has to answer "is this the right image" - and it framed a
+            // 600x900 cover in a landscape window with empty space either side.
+            //
+            // The box below is a ceiling; the image is fitted inside it at its
+            // own aspect ratio, so a tall cover gets a tall window and a wide
+            // banner a wide one.
+            const double MaxPreview = 620.0;
+
+            double aspect = item.Height > 0
+                ? (double)item.Width / item.Height
+                : 1.0;
+
+            double imageWidth = aspect >= 1.0 ? MaxPreview : MaxPreview * aspect;
+            double imageHeight = aspect >= 1.0 ? MaxPreview / aspect : MaxPreview;
+
+            // Chrome and the caption line underneath, which the image does not
+            // get to occupy.
+            window.Width = imageWidth + 40;
+            window.Height = imageHeight + 90;
             window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
+            // Uniform in BOTH directions, so the artwork fills the window it
+            // was just sized for.
+            //
+            // DownOnly left a 460x215 banner as a postage stamp in the middle
+            // of a large empty window - technically its true size, and useless
+            // for judging whether the art is any good. The window is now shaped
+            // to the image, so scaling it up to fit shows the whole thing at a
+            // size worth looking at.
             var image = new System.Windows.Controls.Image
             {
                 Stretch = System.Windows.Media.Stretch.Uniform,
-                StretchDirection = System.Windows.Controls.StretchDirection.DownOnly,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6)
             };
-
-            // Uniform + DownOnly, so a small image shows at its true size
-            // instead of being blown up - which is the whole point of looking
-            // at it before downloading.
             if (item.IsGif && item.UrlUri != null)
             {
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, item.UrlUri);
@@ -489,6 +510,9 @@ namespace ImageRotater.Controls
                     new Uri(item.Url, UriKind.Absolute));
             }
 
+            // The true dimensions matter more now that the preview is scaled -
+            // this is the only place the user learns whether a good-looking
+            // image is actually big enough for a Fullscreen background.
             var status = new System.Windows.Controls.TextBlock
             {
                 Text = $"{item.Dimensions}   {item.Mime}",

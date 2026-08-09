@@ -96,7 +96,7 @@ namespace ImageRotater.Services
                 // The GIF is only deleted once the MP4 exists. A failed
                 // conversion leaves the download exactly as it was rather than
                 // losing the artwork the user just chose.
-                if (ConvertGifsToMp4 && PosterFrame.IsAnimated(target))
+                if (ConvertGifsToMp4 && GifConverter.IsConvertible(target))
                 {
                     string converted = GifConverter.Convert(target);
 

@@ -40,6 +40,78 @@ namespace ImageRotater.Services
             return ExternalTool.Resolve(ConfiguredPath, ExternalTool.FfmpegExe);
         }
 
+        // Formats worth converting to MP4.
+        //
+        // GIF is the obvious one, but an animated WebP or APNG downloads and
+        // renders as a still first frame with nothing saying why - the plugin
+        // treats only .gif as animated, so the motion is silently lost.
+        // BackgroundChanger converts the same four, which is the better list.
+        //
+        // WebM is here because it is video Windows often cannot decode: the
+        // plugin plays MP4 everywhere and WebM only where the user has a codec,
+        // so converting it turns a maybe into a yes.
+        private static readonly string[] ConvertibleExtensions =
+            { ".gif", ".webp", ".apng", ".png", ".webm" };
+
+        // True for a file worth handing to ffmpeg.
+        //
+        // .png is in the list above only because APNG files are routinely named
+        // .png - so a still PNG would match too. ffmpeg produces a
+        // single-frame MP4 from one, which is worse than leaving it alone, so
+        // the frame count decides rather than the extension.
+        public static bool IsConvertible(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            string ext = Path.GetExtension(path);
+
+            foreach (string candidate in ConvertibleExtensions)
+            {
+                if (string.Equals(ext, candidate, StringComparison.OrdinalIgnoreCase))
+                {
+                    return HasMultipleFrames(path);
+                }
+            }
+
+            return false;
+        }
+
+        // Whether a file actually moves.
+        //
+        // GDI+ reports frame counts for GIF and APNG-in-PNG. WebP and WebM it
+        // cannot open at all, and those are taken on trust: a still WebP
+        // converted to MP4 is a wasted step rather than a broken one, and a
+        // WebM is video by definition.
+        private static bool HasMultipleFrames(string path)
+        {
+            string ext = Path.GetExtension(path) ?? string.Empty;
+
+            if (ext.Equals(".webm", StringComparison.OrdinalIgnoreCase) ||
+                ext.Equals(".webp", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            try
+            {
+                using (var image = System.Drawing.Image.FromFile(path))
+                {
+                    var dimension = new System.Drawing.Imaging.FrameDimension(
+                        image.FrameDimensionsList[0]);
+
+                    return image.GetFrameCount(dimension) > 1;
+                }
+            }
+            catch (Exception)
+            {
+                // Unreadable by GDI+ - leave it alone rather than guess.
+                return false;
+            }
+        }
+
         // Converts one GIF, returning the MP4 path or null on failure.
         //
         // The source is left alone. Callers that want it gone delete it after
