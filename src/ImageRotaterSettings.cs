@@ -454,36 +454,14 @@ namespace ImageRotater
             }
         });
 
-        // Fills in whatever is on PATH, for the common case of having installed
-        // a tool since last looking.
+        // No "detect" button.
         //
-        // Only fills an EMPTY box: overwriting a path the user chose
-        // deliberately - a specific build, a portable copy - would be the
-        // button doing more than it says.
-        public RelayCommand<object> DetectTools => new RelayCommand<object>(a =>
-        {
-            if (string.IsNullOrWhiteSpace(Settings.FfmpegPath))
-            {
-                string found = Services.ExternalTool.FindOnPath(Services.ExternalTool.FfmpegExe);
-
-                if (!string.IsNullOrEmpty(found))
-                {
-                    Settings.FfmpegPath = found;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(Settings.YtDlpPath))
-            {
-                string found = Services.ExternalTool.FindOnPath(Services.ExternalTool.YtDlpExe);
-
-                if (!string.IsNullOrEmpty(found))
-                {
-                    Settings.YtDlpPath = found;
-                }
-            }
-
-            UpdateToolStatus();
-        });
+        // It would have copied whatever was on PATH into the boxes, which is
+        // work the plugin already does on its own: an empty path means "search
+        // PATH", and the status line below each box reports what was found.
+        // Filling the box with the same answer only makes the setting look
+        // explicit when it is not - and a user who later moves the tool would
+        // then have a stale path pinned rather than a search that follows it.
 
         // Re-probes both tools. Cheap to call - ToolProbe caches by path and
         // mtime, so reopening Settings does not re-shell.

@@ -115,17 +115,11 @@
                                TextWrapping="Wrap"
                                Margin="0,0,0,4"/>
 
-                    <Separator Margin="0,16"/>
-
-                    <Button Content="Find these on my PATH"
-                            HorizontalAlignment="Left"
-                            Padding="12,4"
-                            Command="{Binding DetectTools}"/>
-                    <TextBlock Text="Leave a path blank to search your PATH automatically. Set one explicitly if you keep the tool somewhere else."
+                    <TextBlock Text="Leave a path blank and the plugin looks on your PATH. Set one explicitly if you keep the tool somewhere else."
                                FontSize="11"
                                Foreground="Gray"
                                TextWrapping="Wrap"
-                               Margin="0,6,0,4"/>
+                               Margin="0,8,0,4"/>
 
                 </StackPanel>
             </ScrollViewer>
