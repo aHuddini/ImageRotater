@@ -93,6 +93,15 @@ namespace ImageRotater
         private bool backgroundChangerCompatibility = true;
         private string steamGridDbApiKey = string.Empty;
 
+        // Explicit paths to external tools, empty meaning "search PATH".
+        //
+        // Neither is bundled: ffmpeg and yt-dlp are both GPL and this plugin is
+        // MIT, so shipping either binary would relicense the project. A path
+        // box is the difference between "install it somewhere the plugin
+        // happens to look" and "point the plugin at the copy you already have".
+        private string ffmpegPath = string.Empty;
+        private string ytDlpPath = string.Empty;
+
         public DisplayMode DisplayMode
         {
             get => displayMode;
@@ -341,6 +350,27 @@ namespace ImageRotater
             set { steamGridDbApiKey = value; OnPropertyChanged(); }
         }
 
+        // Full path to ffmpeg.exe, or empty to search PATH.
+        //
+        // Converts GIFs to MP4, and is what turns a yt-dlp download into
+        // something the plugin can play. Without it those features are simply
+        // unavailable and say so.
+        public string FfmpegPath
+        {
+            get => ffmpegPath;
+            set { ffmpegPath = value; OnPropertyChanged(); }
+        }
+
+        // Full path to yt-dlp.exe, or empty to search PATH.
+        //
+        // Imports video from YouTube and similar as animated artwork. Needs
+        // ffmpeg too - yt-dlp fetches, ffmpeg converts.
+        public string YtDlpPath
+        {
+            get => ytDlpPath;
+            set { ytDlpPath = value; OnPropertyChanged(); }
+        }
+
         public bool EnableRotation
         {
             get => enableRotation;
@@ -380,10 +410,109 @@ namespace ImageRotater
             Settings = saved ?? new ImageRotaterSettings();
         }
 
+        // External tool status, following the pattern FullVid and UniPlaySong
+        // already use: the view binds these, rather than code-behind reaching
+        // into TextBlocks and setting their text and colour by hand.
+        private readonly Services.ToolProbe _probe = new Services.ToolProbe();
+
+        private string _ffmpegStatus = string.Empty;
+        private string _ytDlpStatus = string.Empty;
+
+        public string FfmpegStatus
+        {
+            get => _ffmpegStatus;
+            set { _ffmpegStatus = value; OnPropertyChanged(); }
+        }
+
+        public string YtDlpStatus
+        {
+            get => _ytDlpStatus;
+            set { _ytDlpStatus = value; OnPropertyChanged(); }
+        }
+
+        public RelayCommand<object> BrowseFfmpeg => new RelayCommand<object>(a =>
+        {
+            string path = plugin?.PlayniteApi?.Dialogs?.SelectFile(
+                "ffmpeg|ffmpeg.exe|Executable|*.exe");
+
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                Settings.FfmpegPath = path;
+                UpdateToolStatus();
+            }
+        });
+
+        public RelayCommand<object> BrowseYtDlp => new RelayCommand<object>(a =>
+        {
+            string path = plugin?.PlayniteApi?.Dialogs?.SelectFile(
+                "yt-dlp|yt-dlp.exe|Executable|*.exe");
+
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                Settings.YtDlpPath = path;
+                UpdateToolStatus();
+            }
+        });
+
+        // Fills in whatever is on PATH, for the common case of having installed
+        // a tool since last looking.
+        //
+        // Only fills an EMPTY box: overwriting a path the user chose
+        // deliberately - a specific build, a portable copy - would be the
+        // button doing more than it says.
+        public RelayCommand<object> DetectTools => new RelayCommand<object>(a =>
+        {
+            if (string.IsNullOrWhiteSpace(Settings.FfmpegPath))
+            {
+                string found = Services.ExternalTool.FindOnPath(Services.ExternalTool.FfmpegExe);
+
+                if (!string.IsNullOrEmpty(found))
+                {
+                    Settings.FfmpegPath = found;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(Settings.YtDlpPath))
+            {
+                string found = Services.ExternalTool.FindOnPath(Services.ExternalTool.YtDlpExe);
+
+                if (!string.IsNullOrEmpty(found))
+                {
+                    Settings.YtDlpPath = found;
+                }
+            }
+
+            UpdateToolStatus();
+        });
+
+        // Re-probes both tools. Cheap to call - ToolProbe caches by path and
+        // mtime, so reopening Settings does not re-shell.
+        //
+        // Probing RUNS each tool rather than checking the file exists: a
+        // corrupt download or a wrong-architecture build passes File.Exists and
+        // then fails at the moment the user wanted the feature.
+        public void UpdateToolStatus()
+        {
+            // An empty box means "search PATH", so status reflects what would
+            // actually be used rather than what was typed.
+            string ffmpeg = Services.ExternalTool.Resolve(
+                Settings.FfmpegPath, Services.ExternalTool.FfmpegExe);
+
+            string ytDlp = Services.ExternalTool.Resolve(
+                Settings.YtDlpPath, Services.ExternalTool.YtDlpExe);
+
+            FfmpegStatus = _probe.Probe(ffmpeg, Services.ToolProbe.FfmpegVersionFlag);
+            YtDlpStatus = _probe.Probe(ytDlp, Services.ToolProbe.YtDlpVersionFlag);
+        }
+
         // Snapshot for cancel. Deep clone via JSON so every property is covered
         // automatically as settings are added.
         public void BeginEdit()
         {
+            // Probed on open, so the page tells the user what is available
+            // before they go looking for a feature that is not.
+            UpdateToolStatus();
+
             editingClone = JsonConvert.DeserializeObject<ImageRotaterSettings>(
                 JsonConvert.SerializeObject(Settings));
         }
@@ -396,6 +525,12 @@ namespace ImageRotater
         public void EndEdit()
         {
             plugin.SavePluginSettings(Settings);
+
+            // The converter reads a static path rather than the settings
+            // object, so it has to be told when that path changes - otherwise
+            // a user who just pointed the plugin at ffmpeg would have to
+            // restart Playnite before anything used it.
+            Services.GifConverter.ConfiguredPath = Settings?.FfmpegPath;
         }
 
         public bool VerifySettings(out List<string> errors)

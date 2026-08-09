@@ -76,6 +76,12 @@ namespace ImageRotater
             _selector = new ImageSelector(new ImagePicker(), _sessionCache);
 
             _store = new GameImageStore(GetPluginUserDataPath());
+
+            // Told once at startup and again whenever settings are saved. The
+            // converter holds a static path rather than the settings object,
+            // which keeps it usable from the bulk conversion and the tests
+            // without dragging the whole plugin along.
+            GifConverter.ConfiguredPath = Settings?.FfmpegPath;
             // The logger owns the enabled check, so no call site repeats it.
             _fileLogger = new FileLogger(
                 GetPluginUserDataPath(), () => Settings?.EnableDebugLogging == true);

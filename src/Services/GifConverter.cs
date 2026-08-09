@@ -22,65 +22,22 @@ namespace ImageRotater.Services
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
-        // Resolved once per session. Probing PATH costs a process spawn, and
-        // ffmpeg does not appear or vanish mid-session in any way worth
-        // handling.
-        private static bool _probed;
-        private static string _ffmpegPath;
+        // Where the user said ffmpeg lives, empty meaning "search PATH".
+        //
+        // Set from settings rather than read from them, so this class stays
+        // usable without the whole plugin standing behind it - the bulk
+        // conversion, the download path and the tests all reach it.
+        public static string ConfiguredPath { get; set; }
 
         public static bool IsAvailable
         {
             get { return FindFfmpeg() != null; }
         }
 
-        // Full path to ffmpeg, or null when the user does not have it.
-        //
-        // PATH only. Hunting through Program Files for someone else's copy is
-        // guesswork that produces confusing failures when it finds the wrong
-        // build; if it is not on PATH the honest answer is that it is not
-        // installed.
+        // Full path to ffmpeg, or null when it cannot be found.
         public static string FindFfmpeg()
         {
-            if (_probed)
-            {
-                return _ffmpegPath;
-            }
-
-            _probed = true;
-
-            try
-            {
-                string pathVar = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-
-                foreach (string dir in pathVar.Split(Path.PathSeparator))
-                {
-                    if (string.IsNullOrWhiteSpace(dir))
-                    {
-                        continue;
-                    }
-
-                    try
-                    {
-                        string candidate = Path.Combine(dir.Trim(), "ffmpeg.exe");
-
-                        if (File.Exists(candidate))
-                        {
-                            _ffmpegPath = candidate;
-                            return _ffmpegPath;
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // A malformed PATH entry must not stop the search.
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "ImageRotater: could not probe for ffmpeg");
-            }
-
-            return _ffmpegPath;
+            return ExternalTool.Resolve(ConfiguredPath, ExternalTool.FfmpegExe);
         }
 
         // Converts one GIF, returning the MP4 path or null on failure.

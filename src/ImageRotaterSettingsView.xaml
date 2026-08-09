@@ -16,6 +16,121 @@
          different reasons at different times, and one long page buried both. -->
     <TabControl Margin="8">
 
+        <!-- First tab deliberately: everything here is a prerequisite for a
+             feature that is otherwise silently unavailable. A user who never
+             opens this page gets no downloads, no GIF conversion and no video
+             import, with nothing on screen explaining why. -->
+        <TabItem Header="Setup">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="20">
+
+                    <TextBlock Text="External tools and keys"
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Margin="0,0,0,4"/>
+                    <TextBlock Text="Everything ImageRotater needs from elsewhere. Each one unlocks a specific feature and the plugin works without any of them - it just does less."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,16"/>
+
+                    <TextBlock Text="SteamGridDB"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4"/>
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Foreground="Gray"
+                               Margin="0,0,0,8">
+                        Curated game artwork. Get a free key from steamgriddb.com under
+                        Preferences &#8594; API, then paste it below. Without it, the search
+                        dialog can still use web image search.
+                    </TextBlock>
+
+                    <TextBlock Text="API key"
+                               Margin="0,0,0,2"/>
+                    <TextBox Text="{Binding Settings.SteamGridDbApiKey, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,0,4"/>
+                    <TextBlock Text="Stored in Playnite's settings file as plain text. The key only grants read access to public artwork and can be regenerated on SteamGridDB at any time."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,4"/>
+
+                    <Separator Margin="0,16"/>
+
+                    <TextBlock Text="ffmpeg"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4"/>
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Foreground="Gray"
+                               Margin="0,0,0,8">
+                        Converts animated GIFs to MP4 - markedly smaller, and played by hardware
+                        rather than decoded frame by frame on the UI thread. Not bundled:
+                        ffmpeg is GPL-licensed and this plugin is MIT, so shipping the binary
+                        would change the licence of the whole project.
+                    </TextBlock>
+
+                    <DockPanel Margin="0,0,0,4">
+                        <Button Content="Browse..."
+                                DockPanel.Dock="Right"
+                                MinWidth="80"
+                                Margin="6,0,0,0"
+                                Command="{Binding BrowseFfmpeg}"/>
+                        <TextBox Text="{Binding Settings.FfmpegPath, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalContentAlignment="Center"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding FfmpegStatus}"
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,4"/>
+
+                    <Separator Margin="0,16"/>
+
+                    <TextBlock Text="yt-dlp"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4"/>
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Foreground="Gray"
+                               Margin="0,0,0,8">
+                        Imports video from YouTube and similar sites as animated backgrounds and
+                        covers. Needs ffmpeg as well, which is what converts the download into
+                        the MP4 the plugin plays. Also not bundled, and for the same reason.
+                    </TextBlock>
+
+                    <DockPanel Margin="0,0,0,4">
+                        <Button Content="Browse..."
+                                DockPanel.Dock="Right"
+                                MinWidth="80"
+                                Margin="6,0,0,0"
+                                Command="{Binding BrowseYtDlp}"/>
+                        <TextBox Text="{Binding Settings.YtDlpPath, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalContentAlignment="Center"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding YtDlpStatus}"
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,4"/>
+
+                    <Separator Margin="0,16"/>
+
+                    <Button Content="Find these on my PATH"
+                            HorizontalAlignment="Left"
+                            Padding="12,4"
+                            Command="{Binding DetectTools}"/>
+                    <TextBlock Text="Leave a path blank to search your PATH automatically. Set one explicitly if you keep the tool somewhere else."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,4"/>
+
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
+
         <TabItem Header="General">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="20">
@@ -38,29 +153,6 @@
                                Foreground="Gray"
                                TextWrapping="Wrap"
                                Margin="20,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="SteamGridDB"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock TextWrapping="Wrap"
-                               FontSize="11"
-                               Foreground="Gray"
-                               Margin="0,0,0,8">
-                        Lets you download artwork straight into a game's folder. Get a free key
-                        from steamgriddb.com under Preferences &#8594; API, then paste it below.
-                    </TextBlock>
-
-                    <TextBlock Text="API key"
-                               Margin="0,0,0,2"/>
-                    <TextBox Text="{Binding Settings.SteamGridDbApiKey, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,4"/>
-                    <TextBlock Text="Stored in Playnite's settings file as plain text. The key only grants read access to public artwork and can be regenerated on SteamGridDB at any time."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,4"/>
 
                     <Separator Margin="0,16"/>
 
