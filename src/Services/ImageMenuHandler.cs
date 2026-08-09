@@ -213,10 +213,21 @@ namespace ImageRotater.Services
             }
             else
             {
-                // Backgrounds fill the screen, so more pixels is simply better.
-                best = usable
-                    .OrderByDescending(a => (long)a.Width * a.Height)
-                    .FirstOrDefault();
+                // Backgrounds fill the screen, so pixels matter - but not so
+                // much that a lossy source should win on count alone.
+                //
+                // Sorting purely by area picked a heavily compressed JPEG over
+                // a clean PNG of nearly the same size. A Fullscreen theme then
+                // scales that up to fill a TV and the compression artefacts are
+                // exactly what the user sees. PNG is lossless and survives the
+                // scaling; the file is bigger, which is the trade being made
+                // deliberately.
+                //
+                // Preferred among COMPARABLE sizes rather than absolutely: a
+                // 640x360 PNG beating a 3840x2160 JPEG would be worse than the
+                // problem being fixed. A lossless source wins unless the lossy
+                // one is meaningfully larger.
+                best = PreferLossless(usable, a => (long)a.Width * a.Height);
             }
 
             if (best == null)
@@ -225,6 +236,67 @@ namespace ImageRotater.Services
             }
 
             return await _downloader.DownloadAsync(game.Id, best, kind).ConfigureAwait(false);
+        }
+
+        // How much bigger a lossy image has to be before it outranks a lossless
+        // one.
+        //
+        // 1.4x on area - roughly 1080p against 1440p. Below that the PNG's
+        // lack of compression artefacts is worth more than the extra pixels,
+        // especially once a Fullscreen theme scales the result up. Above it,
+        // the resolution gap is large enough that the JPEG genuinely carries
+        // more detail.
+        private const double LossyAreaAdvantageRequired = 1.4;
+
+        // Picks the best artwork, preferring lossless formats among comparable
+        // sizes.
+        //
+        // "score" is what counts as better for this kind - area for a
+        // background, aspect fit for a cover.
+        private static SteamGridDbArtwork PreferLossless(
+            IReadOnlyList<SteamGridDbArtwork> candidates,
+            Func<SteamGridDbArtwork, long> score)
+        {
+            SteamGridDbArtwork bestLossless = null;
+            SteamGridDbArtwork bestLossy = null;
+
+            foreach (SteamGridDbArtwork candidate in candidates)
+            {
+                bool lossless = IsLossless(candidate);
+
+                if (lossless)
+                {
+                    if (bestLossless == null || score(candidate) > score(bestLossless))
+                    {
+                        bestLossless = candidate;
+                    }
+                }
+                else if (bestLossy == null || score(candidate) > score(bestLossy))
+                {
+                    bestLossy = candidate;
+                }
+            }
+
+            if (bestLossless == null)
+            {
+                return bestLossy;
+            }
+
+            if (bestLossy == null)
+            {
+                return bestLossless;
+            }
+
+            // The lossy one only wins by being substantially bigger.
+            return score(bestLossy) > score(bestLossless) * LossyAreaAdvantageRequired
+                ? bestLossy
+                : bestLossless;
+        }
+
+        // One definition of "lossless", shared with the cover ranking.
+        private static bool IsLossless(SteamGridDbArtwork artwork)
+        {
+            return CoverAspect.IsLossless(artwork);
         }
 
         // Playnite exposes the grid cell ratio the user has actually configured,

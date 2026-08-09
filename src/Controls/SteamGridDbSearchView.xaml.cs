@@ -88,6 +88,17 @@ namespace ImageRotater.Controls
                 FilterToggleRow.Visibility = Visibility.Visible;
             }
 
+            // Conversion needs ffmpeg, which the plugin cannot bundle - it is
+            // GPL and this project is MIT. Say so on the control rather than
+            // leaving a ticked box that quietly does nothing.
+            if (!GifConverter.IsAvailable)
+            {
+                ConvertGifsBox.IsChecked = false;
+                ConvertGifsBox.IsEnabled = false;
+                ConvertGifsNote.Text =
+                    "Needs ffmpeg on your PATH. Without it, GIFs download as GIFs.";
+            }
+
             // Search straight away - the user opened this from a specific game,
             // so making them press Search first is a pointless extra step.
             //
@@ -335,18 +346,181 @@ namespace ImageRotater.Controls
             }
 
             var item = image.DataContext as SteamGridDbArtwork;
-            var uri = item != null && item.IsGif ? item.UrlUri : null;
+
+            // GIF results do not auto-play. They play on HOVER.
+            //
+            // Auto-playing handed XamlAnimatedGif the FULL-SIZE remote URL for
+            // every visible result, so a search returning a dozen animated hits
+            // downloaded and decoded a dozen whole GIFs at once, on the UI
+            // thread, in a 32-bit process. Playnite froze or died - worst on a
+            // web search, where results are arbitrary files with no size
+            // ceiling.
+            //
+            // Hover keeps the preview but bounds it at one file: the mouse can
+            // only be over a single tile. The static thumbnail, a separate and
+            // much smaller URL, is what the grid shows at rest.
+            if (item != null && item.IsGif)
+            {
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, null);
+            }
+        }
+
+        // Starts a GIF playing while the pointer is over its tile.
+        //
+        // One at a time by construction - the mouse is over a single tile - so
+        // this restores the animated preview without the cost that made
+        // auto-play crash Playnite. Stops again on MouseLeave, so a grid the
+        // user has scrolled through is not left with a trail of decoders.
+        private void ResultImage_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            var image = sender as System.Windows.Controls.Image;
+            var item = image?.DataContext as SteamGridDbArtwork;
+
+            if (image == null || item == null || !item.IsGif || item.UrlUri == null)
+            {
+                return;
+            }
 
             try
             {
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, uri);
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, item.UrlUri);
             }
             catch (Exception ex)
             {
-                // A single unplayable result must not take the dialog down: the
+                // One unplayable result must not take the dialog down; the
                 // static thumbnail underneath is still perfectly good.
-                Logger.Warn(ex, "ImageRotater: could not start GIF preview");
+                Logger.Warn(ex, "ImageRotater: could not start the GIF preview");
             }
+        }
+
+        private void ResultImage_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            var image = sender as System.Windows.Controls.Image;
+
+            if (image == null)
+            {
+                return;
+            }
+
+            try
+            {
+                // Released rather than paused: a paused animation still holds
+                // its decoded frames, which is the cost being avoided.
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, null);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not stop the GIF preview");
+            }
+        }
+
+        // Shows one result at full size in its own window.
+        //
+        // A 128px thumbnail cannot answer the questions that decide a download:
+        // is this banner the right shape for a background, is the art actually
+        // sharp at the size a Fullscreen theme will scale it to, and does this
+        // GIF move enough to be worth 5 MB.
+        //
+        // This is also the only place an animated result plays. Doing it in the
+        // grid meant every visible GIF decoding at once, which crashed
+        // Playnite.
+        private void Preview_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as System.Windows.Controls.Button;
+            var item = button?.Tag as SteamGridDbArtwork;
+
+            if (item == null)
+            {
+                return;
+            }
+
+            try
+            {
+                ShowPreviewWindow(item);
+            }
+            catch (Exception ex)
+            {
+                // A preview that will not open must not take the search dialog
+                // with it - the user can still download without looking.
+                Logger.Warn(ex, "ImageRotater: could not open the artwork preview");
+
+                _api.Dialogs.ShowErrorMessage(
+                    "Could not open a preview for that image.", "ImageRotater");
+            }
+        }
+
+        private void ShowPreviewWindow(SteamGridDbArtwork item)
+        {
+            Window window = _api.Dialogs.CreateWindow(new WindowCreationOptions
+            {
+                ShowMinimizeButton = false,
+                ShowMaximizeButton = true,
+                ShowCloseButton = true
+            });
+
+            window.Title = $"Preview - {item.Dimensions}"
+                + (string.IsNullOrEmpty(item.Style) ? string.Empty : $" ({item.Style})");
+
+            // Sized to the screen rather than the image: artwork is routinely
+            // larger than the display, and a window sized to a 4000px source
+            // would open mostly offscreen.
+            window.Width = Math.Min(1400, SystemParameters.PrimaryScreenWidth * 0.9);
+            window.Height = Math.Min(900, SystemParameters.PrimaryScreenHeight * 0.9);
+            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+            var image = new System.Windows.Controls.Image
+            {
+                Stretch = System.Windows.Media.Stretch.Uniform,
+                StretchDirection = System.Windows.Controls.StretchDirection.DownOnly,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Uniform + DownOnly, so a small image shows at its true size
+            // instead of being blown up - which is the whole point of looking
+            // at it before downloading.
+            if (item.IsGif && item.UrlUri != null)
+            {
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, item.UrlUri);
+            }
+            else
+            {
+                image.Source = new System.Windows.Media.Imaging.BitmapImage(
+                    new Uri(item.Url, UriKind.Absolute));
+            }
+
+            var status = new System.Windows.Controls.TextBlock
+            {
+                Text = $"{item.Dimensions}   {item.Mime}",
+                Margin = new Thickness(10, 6, 10, 8),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Foreground = System.Windows.Media.Brushes.Gray,
+                FontSize = 11
+            };
+
+            var layout = new System.Windows.Controls.DockPanel();
+            System.Windows.Controls.DockPanel.SetDock(status, System.Windows.Controls.Dock.Bottom);
+            layout.Children.Add(status);
+            layout.Children.Add(image);
+
+            window.Content = layout;
+
+            // Release the animation on close, or a GIF keeps decoding for the
+            // life of the session behind a window nobody can see.
+            window.Closed += (s, e) =>
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, null);
+
+            window.ShowDialog();
+        }
+
+        private void NextPage_Click(object sender, RoutedEventArgs e)
+        {
+            _model.NextPage();
+        }
+
+        private void PreviousPage_Click(object sender, RoutedEventArgs e)
+        {
+            _model.PreviousPage();
         }
 
         private void ApplyFilters_Click(object sender, RoutedEventArgs e)
@@ -373,6 +547,10 @@ namespace ImageRotater.Controls
 
             DownloadButton.IsEnabled = false;
             _model.Status = $"Downloading {chosen.Count} image(s)...";
+
+            // Read at download time, not construction: the user may have
+            // changed their mind about conversion since the dialog opened.
+            _downloader.ConvertGifsToMp4 = ConvertGifsBox.IsChecked == true;
 
             int saved = 0;
             try

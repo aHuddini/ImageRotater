@@ -609,10 +609,160 @@ namespace ImageRotater
                 new MainMenuItem
                 {
                     MenuSection = "@ImageRotater",
+                    Description = "Convert stored GIFs to MP4",
+                    Action = a => ConvertStoredGifs()
+                },
+                new MainMenuItem
+                {
+                    MenuSection = "@ImageRotater",
                     Description = "Restore original Playnite backgrounds",
                     Action = a => RestoreOriginalBackgrounds()
                 }
             };
+        }
+
+        // Converts every GIF in the plugin's own folders to MP4.
+        //
+        // Same trade as the download-time conversion, applied to what is
+        // already stored: markedly smaller on disk, and playback moves from
+        // decoding frames on the UI thread to hardware-assisted H.264. On a
+        // real library GIF that was 4.7 MB down to 1.0 MB.
+        //
+        // Each source is deleted only after its MP4 exists, so an interrupted
+        // run costs disk rather than artwork.
+        private void ConvertStoredGifs()
+        {
+            if (!GifConverter.IsAvailable)
+            {
+                PlayniteApi.Dialogs.ShowMessage(
+                    "This needs ffmpeg on your PATH.\n\n"
+                    + "ImageRotater cannot bundle it: ffmpeg is GPL-licensed and this plugin is "
+                    + "MIT, so shipping the binary would change the licence of the whole project. "
+                    + "Install ffmpeg and run this again.",
+                    "ImageRotater");
+                return;
+            }
+
+            List<string> gifs = FindStoredGifs();
+
+            if (gifs.Count == 0)
+            {
+                PlayniteApi.Dialogs.ShowMessage(
+                    "No GIFs found in ImageRotater's folders.", "ImageRotater");
+                return;
+            }
+
+            long totalBytes = 0;
+
+            foreach (string gif in gifs)
+            {
+                try { totalBytes += new System.IO.FileInfo(gif).Length; }
+                catch (Exception) { }
+            }
+
+            var confirm = PlayniteApi.Dialogs.ShowMessage(
+                $"Convert {gifs.Count} GIF(s) totalling {totalBytes / 1024 / 1024} MB to MP4?\n\n"
+                + "Each GIF is replaced only after its MP4 is written, so nothing is lost if this "
+                + "is interrupted. Playnite may be unresponsive while it runs.",
+                "ImageRotater",
+                System.Windows.MessageBoxButton.YesNo);
+
+            if (confirm != System.Windows.MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            int converted = 0;
+            long saved = 0;
+
+            PlayniteApi.Dialogs.ActivateGlobalProgress(
+                progress =>
+                {
+                    progress.ProgressMaxValue = gifs.Count;
+
+                    for (int i = 0; i < gifs.Count; i++)
+                    {
+                        if (progress.CancelToken.IsCancellationRequested)
+                        {
+                            break;
+                        }
+
+                        string gif = gifs[i];
+                        progress.Text = $"Converting {System.IO.Path.GetFileName(gif)}...";
+                        progress.CurrentProgressValue = i;
+
+                        try
+                        {
+                            long before = new System.IO.FileInfo(gif).Length;
+                            string mp4 = GifConverter.Convert(gif);
+
+                            if (string.IsNullOrEmpty(mp4))
+                            {
+                                continue;
+                            }
+
+                            long after = new System.IO.FileInfo(mp4).Length;
+
+                            // Only now is the source expendable.
+                            System.IO.File.Delete(gif);
+
+                            converted++;
+                            saved += before - after;
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn(ex, $"ImageRotater: could not convert {gif}");
+                        }
+                    }
+                },
+                new GlobalProgressOptions("Converting GIFs to MP4...", true)
+                {
+                    IsIndeterminate = false
+                });
+
+            // Every converted file changed a game's candidate list, so any
+            // remembered pick may name a file that no longer exists.
+            _sessionCache.Clear();
+            _rotationService.ForgetAll();
+
+            PlayniteApi.Dialogs.ShowMessage(
+                converted == 0
+                    ? "No GIFs could be converted. See the log for details."
+                    : $"Converted {converted} of {gifs.Count} GIF(s), saving {saved / 1024 / 1024} MB.",
+                "ImageRotater");
+        }
+
+        // Every GIF the plugin owns, skipping its own caches - a poster frame
+        // is a JPEG and a published copy is a duplicate of a real candidate.
+        private List<string> FindStoredGifs()
+        {
+            var found = new List<string>();
+
+            try
+            {
+                if (!System.IO.Directory.Exists(_store.ImagesRoot))
+                {
+                    return found;
+                }
+
+                foreach (string file in System.IO.Directory.GetFiles(
+                    _store.ImagesRoot, "*.gif", System.IO.SearchOption.AllDirectories))
+                {
+                    if (file.IndexOf(PosterFrame.CacheFolderName, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        file.IndexOf(Letterboxer.CacheFolderName, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        continue;
+                    }
+
+                    found.Add(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not list stored GIFs");
+            }
+
+            return found;
         }
 
         // Plumbing for whole-library image jobs: progress

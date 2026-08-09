@@ -113,16 +113,66 @@ namespace ImageRotater.Services
                     continue;
                 }
 
-                // Same shape within tolerance: prefer the bigger image.
-                if (Math.Abs(distance - bestDistance) <= tolerance && area > bestArea)
+                // Same shape within tolerance: format first, then size.
+                //
+                // A lossless cover survives being scaled up by a Fullscreen
+                // theme; a JPEG of the same shape shows its compression once
+                // the tile is big enough. Only applied when the shapes already
+                // match, so this never trades the right proportions away.
+                if (Math.Abs(distance - bestDistance) <= tolerance)
                 {
-                    best = item;
-                    bestDistance = distance;
-                    bestArea = area;
+                    bool itemLossless = IsLossless(item);
+                    bool bestLossless = IsLossless(best);
+
+                    bool better = itemLossless != bestLossless
+                        // A lossy image has to be substantially bigger to beat
+                        // a lossless one, matching the background rule.
+                        ? (itemLossless ? area * 14 >= bestArea * 10 : area * 10 > bestArea * 14)
+                        : area > bestArea;
+
+                    if (better)
+                    {
+                        best = item;
+                        bestDistance = distance;
+                        bestArea = area;
+                    }
                 }
             }
 
             return best;
+        }
+
+        // PNG and WebP keep their pixels; JPEG does not.
+        //
+        // Judged by MIME first and URL second: SteamGridDB reports the type,
+        // but a web search result often has only the file name to go on.
+        //
+        // Public because the background ranking applies the same preference -
+        // one definition of "lossless" rather than two that can drift.
+        public static bool IsLossless(SteamGridDbArtwork artwork)
+        {
+            if (artwork == null)
+            {
+                return false;
+            }
+
+            string mime = artwork.Mime ?? string.Empty;
+            string url = artwork.Url ?? string.Empty;
+
+            if (mime.IndexOf("png", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                mime.IndexOf("webp", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            if (mime.IndexOf("jpeg", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                mime.IndexOf("jpg", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return false;
+            }
+
+            return url.IndexOf(".png", StringComparison.OrdinalIgnoreCase) >= 0
+                || url.IndexOf(".webp", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // Same rule applied to files already on disk, so rotation between a

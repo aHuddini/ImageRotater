@@ -16,6 +16,17 @@ namespace ImageRotater.Services
         private readonly GameImageStore _store;
         private readonly SessionSelectionCache _sessionCache;
 
+        // Convert downloaded GIFs to MP4 when ffmpeg is present.
+        //
+        // On by default: it is smaller (78% on a real library GIF) and it moves
+        // playback from frame-by-frame decoding on the UI thread to
+        // hardware-assisted H.264. A user who wants the GIF kept as a GIF turns
+        // it off in the search dialog.
+        //
+        // Does nothing at all without ffmpeg, which the plugin cannot bundle -
+        // it is GPL and this project is MIT.
+        public bool ConvertGifsToMp4 { get; set; } = true;
+
         public ArtworkDownloader(
             ISteamGridDbClient client,
             GameImageStore store,
@@ -74,6 +85,37 @@ namespace ImageRotater.Services
                 }
 
                 File.Move(temp, target);
+
+                // A downloaded GIF becomes an MP4 when the user has ffmpeg and
+                // has left the option on.
+                //
+                // Worth it on both counts, measured against a real 4.7 MB
+                // library GIF: 1.0 MB out, and it then plays through
+                // MediaElement rather than decoding frames on the UI thread.
+                //
+                // The GIF is only deleted once the MP4 exists. A failed
+                // conversion leaves the download exactly as it was rather than
+                // losing the artwork the user just chose.
+                if (ConvertGifsToMp4 && PosterFrame.IsAnimated(target))
+                {
+                    string converted = GifConverter.Convert(target);
+
+                    if (!string.IsNullOrEmpty(converted))
+                    {
+                        try
+                        {
+                            File.Delete(target);
+                        }
+                        catch (Exception)
+                        {
+                            // Keeping both is untidy but harmless - dedup by
+                            // content will not collapse them, since they are
+                            // genuinely different files.
+                        }
+
+                        target = converted;
+                    }
+                }
 
                 // The candidate list changed, so a remembered choice for this
                 // game is stale.

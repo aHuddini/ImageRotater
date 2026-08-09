@@ -129,7 +129,23 @@
                     <TextBlock Text="Animation" FontWeight="SemiBold" Margin="0,0,0,4"/>
                     <CheckBox x:Name="ShowAnimatedBox"
                               Content="Look for animated content"
-                              Margin="0,2,0,12"/>
+                              Margin="0,2"/>
+
+                    <!-- On by default. Smaller on disk, and MP4 plays through
+                         MediaElement - hardware-assisted - where a GIF decodes
+                         frame by frame on the UI thread. Disabled outright when
+                         ffmpeg is missing, with the label saying so, rather
+                         than silently doing nothing. -->
+                    <CheckBox x:Name="ConvertGifsBox"
+                              Content="Convert GIFs to MP4 on download"
+                              IsChecked="True"
+                              Margin="0,2,0,2"/>
+                    <TextBlock x:Name="ConvertGifsNote"
+                               Text="Smaller files, and smoother playback than an animated GIF."
+                               FontSize="10"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,12"/>
 
                     <TextBlock Text="Also show" FontWeight="SemiBold" Margin="0,0,0,4"/>
                     <CheckBox x:Name="ShowNsfwBox" Content="Adult content" Margin="0,2"/>
@@ -205,22 +221,25 @@
                                             BorderBrush="Transparent">
                                         <StackPanel>
                                             <Grid>
-                                                <!-- GIFs preview LIVE: the full file plays in the
-                                                     tile via XamlAnimatedGif. Everything else shows
-                                                     the static thumbnail.
+                                                <!-- Every tile shows the static THUMBNAIL, animated
+                                                     or not.
 
-                                                     The animation is attached from code-behind, not
-                                                     declared here. A gif: xmlns would send BAML down
-                                                     Assembly.Load, which never probes the extension
-                                                     folder, and InitializeComponent would throw
-                                                     before this view built a single element - the
-                                                     dialog would not open at all. Code-behind
-                                                     resolves in the LoadFrom context instead, which
-                                                     is how the cover control has always done it. -->
+                                                     GIFs used to play here, which meant handing
+                                                     XamlAnimatedGif the full-size remote URL for
+                                                     every visible result - a dozen whole GIFs
+                                                     downloading and decoding at once, on the UI
+                                                     thread, in a 32-bit process. That froze and
+                                                     crashed Playnite, worst on a web search where
+                                                     results have no size ceiling.
+
+                                                     Animation lives in the preview window now:
+                                                     one file at a time, and only when asked for. -->
                                                 <Image Height="{Binding ThumbnailHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                        Stretch="UniformToFill"
                                                        Source="{Binding ThumbnailUrl}"
-                                                       Loaded="ResultImage_Loaded"/>
+                                                       Loaded="ResultImage_Loaded"
+                                                       MouseEnter="ResultImage_MouseEnter"
+                                                       MouseLeave="ResultImage_MouseLeave"/>
 
                                                 <!-- Badge so animated results are identifiable at a
                                                      glance even before the frames arrive. -->
@@ -253,6 +272,27 @@
                                                                FontWeight="Bold"
                                                                Foreground="{DynamicResource TextBrushDarker}"/>
                                                 </Border>
+
+                                                <!-- Opens the full image, at size, in its own
+                                                     window - and it is where an animated result
+                                                     actually plays.
+
+                                                     A thumbnail says almost nothing about whether a
+                                                     1920x620 banner is the right shape for a
+                                                     background, or how much a GIF actually moves.
+                                                     Bottom-right so it does not sit under the GIF
+                                                     badge or the selection tick. -->
+                                                <Button Content="&#x1F441;"
+                                                        ToolTip="Preview at full size"
+                                                        Click="Preview_Click"
+                                                        Tag="{Binding}"
+                                                        HorizontalAlignment="Right"
+                                                        VerticalAlignment="Bottom"
+                                                        Margin="4"
+                                                        Width="26" Height="26"
+                                                        Padding="0"
+                                                        FontSize="13"
+                                                        Focusable="False"/>
                                             </Grid>
 
                                             <TextBlock Text="{Binding Dimensions}"
@@ -305,6 +345,31 @@
                     MinWidth="140"
                     Margin="8,0,0,0"
                     Click="DownloadButton_Click"/>
+
+            <!-- Paging, shown only when there is more than one page.
+                 A web search can return a hundred hits, and every visible tile
+                 fetches and decodes a remote thumbnail - so a page is a ceiling
+                 on how much work one search starts, not a layout preference. -->
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding HasMultiplePages, Converter={StaticResource BoolToVisibility}}">
+                <Button Content="&#x25C0;"
+                        Width="30"
+                        Padding="0"
+                        IsEnabled="{Binding CanGoBack}"
+                        Click="PreviousPage_Click"/>
+                <TextBlock Text="{Binding PageLabel}"
+                           VerticalAlignment="Center"
+                           Margin="8,0"
+                           FontSize="11"/>
+                <Button Content="&#x25B6;"
+                        Width="30"
+                        Padding="0"
+                        IsEnabled="{Binding CanGoForward}"
+                        Click="NextPage_Click"/>
+            </StackPanel>
             <Button Content="Close"
                     DockPanel.Dock="Right"
                     MinWidth="90"

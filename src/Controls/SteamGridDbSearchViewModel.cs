@@ -63,6 +63,97 @@ namespace ImageRotater.Controls
 
         private List<SteamGridDbArtwork> _allResults = new List<SteamGridDbArtwork>();
 
+        // Everything matching the current filter, of which Results holds one
+        // page.
+        //
+        // Paging exists to bound cost, not to tidy the layout. Every visible
+        // tile fetches and decodes a remote thumbnail, and a web search happily
+        // returns a hundred hits - which is a hundred concurrent downloads in a
+        // 32-bit process. A page is a ceiling on how much work one search can
+        // start.
+        private List<SteamGridDbArtwork> _filtered = new List<SteamGridDbArtwork>();
+
+        private int _page;
+
+        // Enough to fill the window without scrolling far, few enough that a
+        // page costs little to render.
+        private const int PageSize = 24;
+
+        public int PageCount
+        {
+            get
+            {
+                return _filtered.Count == 0
+                    ? 1
+                    : (_filtered.Count + PageSize - 1) / PageSize;
+            }
+        }
+
+        // 1-based for display; _page is the 0-based index.
+        public int CurrentPage
+        {
+            get { return _page + 1; }
+        }
+
+        public bool HasMultiplePages
+        {
+            get { return PageCount > 1; }
+        }
+
+        public bool CanGoBack
+        {
+            get { return _page > 0; }
+        }
+
+        public bool CanGoForward
+        {
+            get { return _page + 1 < PageCount; }
+        }
+
+        public void NextPage()
+        {
+            if (!CanGoForward)
+            {
+                return;
+            }
+
+            _page++;
+            ShowCurrentPage();
+        }
+
+        public void PreviousPage()
+        {
+            if (!CanGoBack)
+            {
+                return;
+            }
+
+            _page--;
+            ShowCurrentPage();
+        }
+
+        private void ShowCurrentPage()
+        {
+            Results.Clear();
+
+            foreach (SteamGridDbArtwork item in _filtered.Skip(_page * PageSize).Take(PageSize))
+            {
+                Results.Add(item);
+            }
+
+            OnPropertyChanged(nameof(CurrentPage));
+            OnPropertyChanged(nameof(PageCount));
+            OnPropertyChanged(nameof(HasMultiplePages));
+            OnPropertyChanged(nameof(CanGoBack));
+            OnPropertyChanged(nameof(CanGoForward));
+            OnPropertyChanged(nameof(PageLabel));
+        }
+
+        public string PageLabel
+        {
+            get { return $"Page {CurrentPage} of {PageCount}"; }
+        }
+
         private string _status = string.Empty;
         private bool _isBusy;
 
@@ -136,7 +227,7 @@ namespace ImageRotater.Controls
                     return false;
                 }
 
-                Status = $"{Results.Count} of {_allResults.Count} shown for \"{query}\".";
+                Status = $"{_filtered.Count} of {_allResults.Count} match for \"{query}\".";
                 return true;
             }
             finally
@@ -203,7 +294,7 @@ namespace ImageRotater.Controls
                     return false;
                 }
 
-                Status = $"{Results.Count} of {_allResults.Count} shown for {via}.";
+                Status = $"{_filtered.Count} of {_allResults.Count} match for {via}.";
                 return true;
             }
             finally
@@ -216,6 +307,38 @@ namespace ImageRotater.Controls
         // cannot offer a value that would filter everything away.
         private void RebuildFilterOptions()
         {
+            // What was ticked before the rebuild, so a new search does not
+            // silently discard it.
+            //
+            // These options are recreated from whatever the results contain, so
+            // every tick used to die with the objects that carried it. Ticking
+            // a resolution and pressing Search therefore cleared the tick -
+            // which reads as the checkbox refusing to stay on.
+            //
+            // Only values that still exist in the new results come back. A
+            // resolution nothing matches any more cannot be re-ticked, and
+            // silently keeping it would filter every result away and look like
+            // the search returned nothing.
+            var wereChecked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (FilterOption option in DimensionOptions)
+            {
+                if (option.IsChecked && !string.IsNullOrEmpty(option.Value))
+                {
+                    wereChecked.Add(option.Value);
+                }
+            }
+
+            var checkedStyles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (FilterOption option in StyleOptions)
+            {
+                if (option.IsChecked && !string.IsNullOrEmpty(option.Value))
+                {
+                    checkedStyles.Add(option.Value);
+                }
+            }
+
             DimensionOptions.Clear();
             AspectGroups.Clear();
 
@@ -234,7 +357,8 @@ namespace ImageRotater.Controls
                     var option = new FilterOption
                     {
                         Value = dimension.Dimensions,
-                        Label = $"{dimension.Dimensions} ({dimension.Count})"
+                        Label = $"{dimension.Dimensions} ({dimension.Count})",
+                        IsChecked = wereChecked.Contains(dimension.Dimensions)
                     };
 
                     group.Dimensions.Add(option);
@@ -247,7 +371,12 @@ namespace ImageRotater.Controls
             StyleOptions.Clear();
             foreach (string style in ArtworkFilter.AvailableStyles(_allResults))
             {
-                StyleOptions.Add(new FilterOption { Value = style, Label = style });
+                StyleOptions.Add(new FilterOption
+                {
+                    Value = style,
+                    Label = style,
+                    IsChecked = checkedStyles.Contains(style)
+                });
             }
         }
 
@@ -275,15 +404,18 @@ namespace ImageRotater.Controls
                 Filter.Styles.Add(option.Value);
             }
 
-            Results.Clear();
-            foreach (SteamGridDbArtwork item in ArtworkFilter.Apply(_allResults, Filter))
-            {
-                Results.Add(item);
-            }
+            _filtered = ArtworkFilter.Apply(_allResults, Filter).ToList();
+
+            // Back to page one whenever the filter changes: staying on page 4
+            // of a result set that just shrank to two pages shows an empty grid
+            // and looks like the filter found nothing.
+            _page = 0;
+
+            ShowCurrentPage();
 
             if (_allResults.Count > 0)
             {
-                Status = $"{Results.Count} of {_allResults.Count} shown.";
+                Status = $"{_filtered.Count} of {_allResults.Count} match.";
             }
         }
     }
