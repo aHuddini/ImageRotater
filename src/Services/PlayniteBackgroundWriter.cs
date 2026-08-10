@@ -224,7 +224,29 @@ namespace ImageRotater.Services
                 // one transient extra copy rather than accumulating.
                 string previousId = GetCurrent(game, kind);
 
-                string newId = ImportFile(imagePath, game.Id);
+                // Backgrounds are imported at ONE width per game.
+                //
+                // Playnite blurs the window background with a fixed-radius
+                // BlurEffect applied AFTER the image has been scaled to fit,
+                // and decodes every background to the screen's working width.
+                // So a 3840px source comes down 2.7x while a 1440px one is
+                // untouched, and the same blur radius then covers a very
+                // different fraction of each picture. Rotating between them
+                // makes the blur visibly jump - and the jump vanishes when two
+                // images happen to share a resolution, which is what gave this
+                // away.
+                //
+                // Only the imported copy is resized; the candidate on disk
+                // keeps its original resolution.
+                string toImport = NormaliseIfBackground(game, kind, imagePath);
+
+                string newId = ImportFile(toImport, game.Id);
+
+                // The normalised copy is a temp file, not a candidate.
+                if (!string.Equals(toImport, imagePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    try { File.Delete(toImport); } catch (Exception) { }
+                }
                 if (string.IsNullOrEmpty(newId))
                 {
                     return false;
@@ -298,7 +320,144 @@ namespace ImageRotater.Services
         }
 
         // Puts every touched game back the way it was, and forgets the backup.
-        public int RestoreAll()
+        //
+        // Virtual as a test seam: LibraryReset must not delete anything when this
+        // fails, and that ordering is only testable with a restore that fails.
+        // Whether this plugin has written artwork into the library at all.
+        //
+        // Read before a reset deletes anything: a restore that put nothing back
+        // is fine on a library the plugin never touched, and a disaster on one
+        // where it did.
+        // Set by the plugin so this can size backgrounds to the display, and
+        // left null in tests, where there is no screen.
+        public Func<int> ScreenWidth { get; set; }
+
+        // Whether background widths are levelled at all. Off restores the old
+        // behaviour of importing each candidate exactly as it is.
+        public Func<bool> NormaliseBackgrounds { get; set; }
+
+        // Returns a copy of the background resized to this game's common width,
+        // or the original path when nothing needs doing.
+        private string NormaliseIfBackground(Game game, ArtworkKind kind, string imagePath)
+        {
+            if (kind != ArtworkKind.Background)
+            {
+                return imagePath;
+            }
+
+            if (NormaliseBackgrounds != null && !NormaliseBackgrounds())
+            {
+                return imagePath;
+            }
+
+            try
+            {
+                string folder = Path.Combine(
+                    _imagesRoot, game.Id.ToString(), "backgrounds");
+
+                if (!Directory.Exists(folder))
+                {
+                    return imagePath;
+                }
+
+                // Keyed on the WIDEST candidate rather than on the current
+                // pick, so every rotation for this game lands on the same
+                // number - which is the entire point.
+                int target = BackgroundNormaliser.TargetWidthFor(
+                    Directory.GetFiles(folder),
+                    ScreenWidth == null ? 0 : ScreenWidth());
+
+                if (target <= 0)
+                {
+                    return imagePath;
+                }
+
+                string temp = Path.Combine(
+                    Path.GetTempPath(),
+                    "ir_bg_" + Guid.NewGuid().ToString("N") + ".png");
+
+                return BackgroundNormaliser.NormaliseTo(imagePath, target, temp);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not normalise the background");
+                return imagePath;
+            }
+        }
+
+        public bool HasWrittenArtwork
+        {
+            get { return _written.Count > 0; }
+        }
+
+        // Clears any game still pointing at artwork this plugin wrote that no
+        // longer exists on disk.
+        //
+        // Playnite renders a dead artwork id as SOLID BLACK, not as a blank
+        // tile, so a grid of them looks like the theme broke rather than like
+        // artwork went missing. The game's own art cannot be recovered here -
+        // that is what the preserved originals are for - but nulling the field
+        // makes Playnite fall back to its own placeholder, which is honest.
+        //
+        // Returns how many games were mended.
+        public int ClearDeadReferences()
+        {
+            int cleared = 0;
+
+            // Scans every GAME, not the written list.
+            //
+            // The written list is pruned on save - only ids still referenced by
+            // a game survive - so after Playnite reclaimed the files it no
+            // longer holds the very ids that went dead. Walking it therefore
+            // found nothing, while hundreds of games still pointed at deleted
+            // artwork. The game records are the only complete answer.
+            //
+            // Safe for artwork this plugin never touched: an id that resolves
+            // is left alone, so a game with its own working artwork is never
+            // altered.
+            foreach (Game game in _api.Database.Games.ToList())
+            {
+                bool changed = false;
+
+                foreach (ArtworkKind kind in
+                    new[] { ArtworkKind.Background, ArtworkKind.Cover })
+                {
+                    string current = GetCurrent(game, kind);
+
+                    if (string.IsNullOrEmpty(current) || ArtworkIdResolves(current))
+                    {
+                        continue;
+                    }
+
+                    // Prefer the game's own preserved original over a blank.
+                    string replacement = ReimportPreservedOriginal(game, kind);
+
+                    SetCurrent(game, kind, replacement);
+
+                    _written.Remove(current);
+                    changed = true;
+                    cleared++;
+                }
+
+                if (!changed)
+                {
+                    continue;
+                }
+
+                Game target = game;
+
+                InvokeOnUi(() => _api.Database.Games.Update(target));
+            }
+
+            if (cleared > 0)
+            {
+                Save();
+            }
+
+            return cleared;
+        }
+
+        public virtual int RestoreAll()
         {
             int restored = 0;
 

@@ -70,6 +70,16 @@ namespace ImageRotater.Services
                     Action = a => handler.ClearImages(selected, current)
                 };
             }
+
+            // At the ImageRotater root, not under Backgrounds or Covers: a
+            // fragmented video shows as a black tile wherever it is used, and
+            // the user chasing one should not have to guess which kind it was.
+            yield return new GameMenuItem
+            {
+                MenuSection = "ImageRotater",
+                Description = "Repair videos (fix black tiles)",
+                Action = a => handler.RepairVideos(selected)
+            };
         }
     }
 }

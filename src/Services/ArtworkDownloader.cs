@@ -37,6 +37,63 @@ namespace ImageRotater.Services
             _sessionCache = sessionCache;
         }
 
+        // Supplies the external tool paths for YouTube downloads.
+        //
+        // A getter rather than the settings object, so a path the user corrects
+        // mid-session takes effect without rebuilding the downloader. Static
+        // because the downloader is constructed in several places and only this
+        // one path needs it.
+        public static Func<ImageRotaterSettings> SettingsSource { get; set; }
+
+        // Fetches a YouTube video as the game's artwork.
+        //
+        // Saved as MP4 next to the images, which is what the rest of the plugin
+        // already plays - a video pick and a still pick are the same thing to
+        // everything downstream of here.
+        private async Task<string> DownloadVideoAsync(
+            Guid gameId, SteamGridDbArtwork artwork, ArtworkKind kind)
+        {
+            ImageRotaterSettings settings =
+                SettingsSource == null ? null : SettingsSource();
+
+            var downloader = new YouTubeDownloader(settings);
+
+            if (!downloader.IsAvailable)
+            {
+                Logger.Warn("ImageRotater: YouTube download needs both yt-dlp and ffmpeg");
+                return null;
+            }
+
+            try
+            {
+                string folder = _store.GetGameFolder(gameId, kind);
+                Directory.CreateDirectory(folder);
+
+                // Named from a hash of the watch URL, like a web result: a
+                // YouTube id is not a SteamGridDB id, and re-picking the same
+                // video should replace the file rather than add another.
+                string target = Path.Combine(
+                    folder, "yt_" + StableHash(artwork.Url) + ".mp4");
+
+                bool ok = await downloader
+                    .DownloadAsync(artwork.Url, target, System.Threading.CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                if (!ok)
+                {
+                    return null;
+                }
+
+                _sessionCache?.Forget(gameId);
+                return target;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "ImageRotater: could not save the YouTube download");
+                return null;
+            }
+        }
+
         // Saves one artwork into the game's folder. Returns the resulting path,
         // or null on failure.
         public async Task<string> DownloadAsync(
@@ -47,6 +104,14 @@ namespace ImageRotater.Services
             if (artwork == null || string.IsNullOrEmpty(artwork.Url))
             {
                 return null;
+            }
+
+            // A YouTube result's Url is a watch PAGE, not a file - fetching it
+            // here would save the HTML. yt-dlp has to do the download, and
+            // ffmpeg the container work, so that path forks off entirely.
+            if (artwork.IsYouTube)
+            {
+                return await DownloadVideoAsync(gameId, artwork, kind).ConfigureAwait(false);
             }
 
             SteamGridDbResult<byte[]> download = await _client.DownloadAsync(artwork.Url).ConfigureAwait(false);
@@ -85,6 +150,18 @@ namespace ImageRotater.Services
                 }
 
                 File.Move(temp, target);
+
+                // Any mp4 fetched as plain bytes gets its container checked.
+                //
+                // Steam's serve normal progressive files today (verified:
+                // ftyp isom), but a fragmented one from any source renders as
+                // solid black with no error anywhere, so the one cheap read
+                // that rules it out is worth doing on every video download.
+                if (target.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+                    && GifConverter.IsFragmented(target))
+                {
+                    GifConverter.Remux(target);
+                }
 
                 // A downloaded GIF becomes an MP4 when the user has ffmpeg and
                 // has left the option on.

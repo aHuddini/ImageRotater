@@ -23,6 +23,7 @@ namespace ImageRotater.Services
         private readonly SessionSelectionCache _sessionCache;
         private readonly ISteamGridDbClient _steamGridDb;
         private readonly ArtworkDownloader _downloader;
+        private readonly Func<ImageRotaterSettings> _settings;
 
         // Called when a game's candidate images have changed. Write mode
         // rotates a game only once per selection, so without this the game
@@ -37,6 +38,7 @@ namespace ImageRotater.Services
             SessionSelectionCache sessionCache,
             ISteamGridDbClient steamGridDb,
             ArtworkDownloader downloader,
+            Func<ImageRotaterSettings> settings = null,
             Action<Guid> onImagesChanged = null)
         {
             _api = api;
@@ -44,6 +46,11 @@ namespace ImageRotater.Services
             _sessionCache = sessionCache;
             _steamGridDb = steamGridDb;
             _downloader = downloader;
+
+            // A getter rather than the object: settings can change while
+            // Playnite runs, and a snapshot taken at startup would leave the
+            // search dialog using an ffmpeg path the user has since corrected.
+            _settings = settings;
             _onImagesChanged = onImagesChanged;
         }
 
@@ -92,7 +99,12 @@ namespace ImageRotater.Services
 
                 window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
                 window.Content = new Controls.SteamGridDbSearchView(
-                    _api, _steamGridDb, _downloader, game.Id, game.Name, kind);
+                    _api, _steamGridDb, _downloader, game, kind,
+                    _settings == null ? null : _settings(),
+
+                    // The web view's data folder goes beside the images rather
+                    // than in the user's temp, so it is removed with the plugin.
+                    System.IO.Path.GetDirectoryName(_store.ImagesRoot));
 
                 window.ShowDialog();
             }
@@ -421,6 +433,65 @@ namespace ImageRotater.Services
             {
                 Logger.Warn(ex, $"ImageRotater: could not open image folder for {game.Name}");
             }
+        }
+
+        // Remuxes any fragmented video the selected games hold.
+        //
+        // A YouTube download can arrive as DASH fragments, which Windows
+        // renders as SOLID BLACK while reporting them as playing - so the user
+        // sees a black tile with no error anywhere. This puts the same video
+        // into a container everything can read; a stream copy, no quality
+        // loss.
+        public void RepairVideos(IEnumerable<Game> games)
+        {
+            var targets = games?.ToList();
+            if (targets == null || targets.Count == 0)
+            {
+                return;
+            }
+
+            if (!GifConverter.IsAvailable)
+            {
+                _api.Dialogs.ShowErrorMessage(
+                    "This needs ffmpeg. Set its path on the Setup tab in the "
+                    + "ImageRotater settings first.",
+                    "ImageRotater");
+                return;
+            }
+
+            int repaired = 0;
+            int failed = 0;
+            int untouched = 0;
+
+            foreach (Game game in targets)
+            {
+                BulkConverter.Result result =
+                    BulkConverter.RepairVideosForGame(_store, game.Id);
+
+                repaired += result.Converted;
+                failed += result.Failed;
+                untouched += result.Skipped;
+
+                if (result.Converted > 0)
+                {
+                    // The repaired file has the same path, but rotation may be
+                    // holding a decoded copy of the broken one.
+                    _onImagesChanged?.Invoke(game.Id);
+                }
+            }
+
+            string message = repaired > 0
+                ? $"Repaired {repaired} video(s)."
+                : untouched > 0
+                    ? "All videos here are already fine."
+                    : "No videos found for the selected game(s).";
+
+            if (failed > 0)
+            {
+                message += $" {failed} could not be repaired - see the log.";
+            }
+
+            _api.Dialogs.ShowMessage(message, "ImageRotater");
         }
 
         public void ClearImages(IEnumerable<Game> games, ArtworkKind kind)
