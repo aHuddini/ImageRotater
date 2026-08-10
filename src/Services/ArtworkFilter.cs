@@ -17,9 +17,11 @@ namespace ImageRotater.Services
         public bool ShowHumor { get; set; }
         public bool ShowEpilepsy { get; set; }
 
-        // Animated formats cannot be rendered yet, so they are hidden unless
-        // the user deliberately asks to see them.
-        public bool ShowAnimated { get; set; }
+        // Whether animated results are shown. ON by default now: they render
+        // and preview correctly, and animated artwork is the reason most people
+        // open the dialog - hiding it meant the best results were invisible
+        // unless the user knew to go looking for the checkbox.
+        public bool ShowAnimated { get; set; } = true;
 
         public ArtworkFilterState()
         {

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ImageRotater.Models;
 using ImageRotater.Services;
@@ -198,6 +199,163 @@ namespace ImageRotater.Controls
         // the checkboxes and the download loop all work unchanged. Web results
         // have no curated style, so the style filter will show a single "web"
         // entry for them - that is honest rather than hiding the difference.
+        // YouTube, via yt-dlp.
+        //
+        // The one source that actually has motion artwork: SteamGridDB's
+        // animated entries are WebP and WebM that WPF cannot decode, and Steam
+        // publishes no video art at all.
+        //
+        // Results are mapped into the same model the other tabs use so the
+        // existing tile, filter and selection all work unchanged - the poster
+        // frame is an ordinary JPEG. Only the download differs, which
+        // IsYouTube marks.
+        public async Task<bool> SearchYouTubeAsync(
+            string query, ImageRotaterSettings settings, CancellationToken cancellationToken)
+        {
+            var search = new YouTubeSearch(settings);
+
+            if (!search.IsAvailable)
+            {
+                _allResults = new List<SteamGridDbArtwork>();
+                RebuildFilterOptions();
+                ApplyFilter();
+
+                Status = "yt-dlp is not set up. Add it on the Setup tab in settings.";
+                return false;
+            }
+
+            IsBusy = true;
+            try
+            {
+                List<Models.YouTubeVideo> videos =
+                    await search.SearchAsync(query, 24, cancellationToken).ConfigureAwait(true);
+
+                var mapped = new List<SteamGridDbArtwork>();
+                int id = 0;
+
+                foreach (Models.YouTubeVideo video in videos)
+                {
+                    mapped.Add(new SteamGridDbArtwork
+                    {
+                        Id = ++id,
+                        Url = video.Url,
+                        ThumbnailUrl = video.ThumbnailUrl,
+
+                        // hqdefault.jpg is always 480x360. The real video is
+                        // whatever it is until downloaded, but the filters need
+                        // numbers and these describe what the tile is showing.
+                        Width = 480,
+                        Height = 360,
+
+                        Style = video.Channel,
+                        Mime = "video/mp4",
+                        DurationText = video.DurationText,
+                        IsYouTube = true,
+
+                        // Named from a URL hash like a web result: a YouTube id
+                        // is not a SteamGridDB id and cannot name a file.
+                        IsFromWeb = true
+                    });
+                }
+
+                _allResults = mapped;
+                RebuildFilterOptions();
+                ApplyFilter();
+
+                if (mapped.Count > 0)
+                {
+                    Status = $"{mapped.Count} from YouTube.";
+                }
+                else if (!search.HasJsRuntime)
+                {
+                    // The likeliest cause by far, and unguessable otherwise:
+                    // yt-dlp exits 0 with no results when it has no JS runtime,
+                    // which is indistinguishable from finding nothing.
+                    Status = "No results - deno is not set up, and yt-dlp needs it to "
+                        + "read YouTube. Add it on the Setup tab in settings.";
+                }
+                else
+                {
+                    Status = "No videos found. Try different search words.";
+                }
+
+                return mapped.Count > 0;
+            }
+            catch (Exception ex)
+            {
+                Status = "YouTube search failed. " + ex.Message;
+                return false;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        // Steam's own library artwork for this game.
+        //
+        // No search term and no API key: the appid is already on the Playnite
+        // game, so this is a direct lookup rather than a search. Results are
+        // plain JPEG, which WPF decodes natively - the reason this tab leads.
+        public async Task<bool> LoadSteamArtworkAsync(
+            Playnite.SDK.Models.Game game, ArtworkKind kind)
+        {
+            IsBusy = true;
+            try
+            {
+                var source = new SteamArtworkSource();
+
+                // Off-thread because each candidate costs a HEAD request, and
+                // the first call may also download Steam's app list to match
+                // this game by name. The collections updated afterwards are
+                // bound to the UI, so this has to come back to this thread.
+                string appId = await Task
+                    .Run(() => SteamArtworkSource.ResolveAppId(game))
+                    .ConfigureAwait(true);
+
+                if (appId == null)
+                {
+                    _allResults = new List<SteamGridDbArtwork>();
+                    RebuildFilterOptions();
+                    ApplyFilter();
+
+                    Status = "No game on Steam matches this name. Try the other tabs.";
+                    return false;
+                }
+
+                // Stills and trailers in one pass. Trailers are the animated
+                // content the store page shows - plain MP4, no ffmpeg needed.
+                List<SteamGridDbArtwork> found = await Task
+                    .Run(() => source.GetArtwork(game, kind)
+                        .Concat(source.GetVideo(game, kind))
+                        .ToList())
+                    .ConfigureAwait(true);
+
+                _allResults = found;
+                RebuildFilterOptions();
+                ApplyFilter();
+
+                int videos = found.Count(a => a.IsAnimated);
+
+                Status = found.Count == 0
+                    ? "Steam has no artwork of this kind for this game."
+                    : videos > 0
+                        ? $"{found.Count} from Steam, {videos} animated."
+                        : $"{found.Count} from Steam.";
+
+                return found.Count > 0;
+            }
+            catch (Exception ex)
+            {
+                Status = "Could not reach Steam. " + ex.Message;
+                return false;
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
         public async Task<bool> SearchWebAsync(string query, WebImageSearch search)
         {
             if (search == null || !search.IsAvailable)
@@ -388,6 +546,19 @@ namespace ImageRotater.Controls
         public IReadOnlyList<SteamGridDbArtwork> SelectedArtwork()
         {
             return _allResults.Where(a => a.IsSelected).ToList();
+        }
+
+        // Empties the results, for when the tab changes.
+        //
+        // Without this the previous tab's results stay on screen under the new
+        // tab's header for as long as the next search takes - which reads as
+        // "the tab did not refresh", especially when the new search returns
+        // fewer results than the old one.
+        public void Clear()
+        {
+            _allResults = new List<SteamGridDbArtwork>();
+            RebuildFilterOptions();
+            ApplyFilter();
         }
 
         public void ApplyFilter()

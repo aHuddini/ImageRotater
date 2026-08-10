@@ -22,6 +22,9 @@ namespace ImageRotater.Controls
         private readonly ArtworkDownloader _downloader;
         private readonly IPlayniteAPI _api;
         private readonly Guid _gameId;
+        private readonly Playnite.SDK.Models.Game _game;
+        private readonly ImageRotaterSettings _settings;
+        private readonly string _pluginUserDataPath;
         private readonly ArtworkKind _kind;
 
         // Peer source to SteamGridDB, used when the checkbox is ticked.
@@ -60,22 +63,36 @@ namespace ImageRotater.Controls
             IPlayniteAPI api,
             ISteamGridDbClient client,
             ArtworkDownloader downloader,
-            Guid gameId,
-            string gameName,
-            ArtworkKind kind = ArtworkKind.Background)
+            Playnite.SDK.Models.Game game,
+            ArtworkKind kind = ArtworkKind.Background,
+            ImageRotaterSettings settings = null,
+            string pluginUserDataPath = null)
         {
             InitializeComponent();
 
             _api = api;
             _downloader = downloader;
-            _gameId = gameId;
+
+            // The whole Game, not just its id: the Steam tab needs GameId and
+            // PluginId to find the appid, and the name is on it anyway.
+            _game = game;
+            _gameId = game?.Id ?? Guid.Empty;
+            _settings = settings ?? new ImageRotaterSettings();
+
+            // Where the web view keeps its own data folder.
+            _pluginUserDataPath = pluginUserDataPath;
             _kind = kind;
             _webSearch = new WebImageSearch(api);
 
             _model = new SteamGridDbSearchViewModel(client);
             DataContext = _model;
 
-            SearchBox.Text = gameName ?? string.Empty;
+            SearchBox.Text = game?.Name ?? string.Empty;
+
+            // Deliberately NOT restricted to games Steam imported. The artwork
+            // is keyed by Steam's appid, which exists for a game regardless of
+            // where this user's copy came from - so a GOG or Xbox install
+            // reaches the same art, once the appid is worked out from the name.
 
             // Fullscreen is read from across a room, so the tiles grow and the
             // filter column gets out of the way. Desktop keeps the sizes that
@@ -121,6 +138,14 @@ namespace ImageRotater.Controls
                 if (ReferenceEquals(_open, this))
                 {
                     _open = null;
+                }
+
+                // The web view owns a browser process; leaving it running
+                // behind a closed dialog would leak one per search.
+                if (_previewRenderer != null)
+                {
+                    _previewRenderer.Dispose();
+                    _previewRenderer = null;
                 }
             };
         }
@@ -187,6 +212,19 @@ namespace ImageRotater.Controls
             SearchButton.IsEnabled = false;
             try
             {
+                if (ReferenceEquals(SourceTabs.SelectedItem, SteamTab))
+                {
+                    await _model.LoadSteamArtworkAsync(_game, _kind);
+                    return;
+                }
+
+                if (ReferenceEquals(SourceTabs.SelectedItem, YouTubeTab))
+                {
+                    await _model.SearchYouTubeAsync(
+                        SearchBox.Text, _settings, System.Threading.CancellationToken.None);
+                    return;
+                }
+
                 if (ReferenceEquals(SourceTabs.SelectedItem, WebTab))
                 {
                     // NOT wrapped in Task.Run: the method puts only the
@@ -227,12 +265,56 @@ namespace ImageRotater.Controls
         {
             // Fires once while the tabs are being built, before the rest of the
             // dialog exists. The Loaded handler runs the first search.
-            if (!IsLoaded || !ReferenceEquals(e.OriginalSource, SourceTabs))
+            if (!IsLoaded)
             {
                 return;
             }
 
+            // Compared against SENDER, not OriginalSource.
+            //
+            // SelectionChanged bubbles, and for a TabControl the OriginalSource
+            // is frequently the inner TabItem rather than the TabControl - so
+            // the obvious-looking OriginalSource check dropped real tab changes
+            // and the results kept belonging to the previous tab. sender is the
+            // element the handler is attached to, which is exactly the question
+            // being asked.
+            if (!ReferenceEquals(sender, SourceTabs))
+            {
+                return;
+            }
+
+            // The old tab's results must not sit under the new tab's header
+            // while the next search runs.
+            _model.Clear();
+
+            SyncSearchTermToTab();
+
             await RunSearch();
+        }
+
+        // The YouTube tab searches for "<game> live wallpaper", the others for
+        // the game's name.
+        //
+        // Only rewritten while the box still holds a term this method itself
+        // put there - the moment a user types their own words, switching tabs
+        // stops overwriting them.
+        private void SyncSearchTermToTab()
+        {
+            string plain = (_game?.Name ?? string.Empty).Trim();
+            string forYouTube = Services.YouTubeSearch.DefaultQueryFor(plain);
+
+            string current = (SearchBox.Text ?? string.Empty).Trim();
+
+            bool onYouTube = ReferenceEquals(SourceTabs.SelectedItem, YouTubeTab);
+
+            if (onYouTube && current == plain)
+            {
+                SearchBox.Text = forYouTube;
+            }
+            else if (!onYouTube && current == forYouTube)
+            {
+                SearchBox.Text = plain;
+            }
         }
 
         private async void SearchBox_KeyDown(object sender, KeyEventArgs e)
@@ -371,59 +453,24 @@ namespace ImageRotater.Controls
         // this restores the animated preview without the cost that made
         // auto-play crash Playnite. Stops again on MouseLeave, so a grid the
         // user has scrolled through is not left with a trail of decoders.
+        // Hovering a tile no longer plays it.
+        //
+        // It used to start XamlAnimatedGif on the tile's remote URI, which
+        // downloaded the whole GIF and decoded every frame on the UI thread -
+        // on mouse-over, for a file the user had not asked for. Skimming a grid
+        // of results meant fetching megabytes nobody chose to fetch.
+        //
+        // The preview button covers the same need without the ambush: it
+        // streams through MediaElement and starts in about a second. The
+        // handlers stay as no-ops because the tile template binds them.
         private void ResultImage_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            var image = sender as System.Windows.Controls.Image;
-            var item = image?.DataContext as SteamGridDbArtwork;
-
-            if (image == null || item == null || !item.IsGif || item.UrlUri == null)
-            {
-                return;
-            }
-
-            try
-            {
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, item.UrlUri);
-            }
-            catch (Exception ex)
-            {
-                // One unplayable result must not take the dialog down; the
-                // static thumbnail underneath is still perfectly good.
-                Logger.Warn(ex, "ImageRotater: could not start the GIF preview");
-            }
         }
 
         private void ResultImage_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            var image = sender as System.Windows.Controls.Image;
-
-            if (image == null)
-            {
-                return;
-            }
-
-            try
-            {
-                // Released rather than paused: a paused animation still holds
-                // its decoded frames, which is the cost being avoided.
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, null);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "ImageRotater: could not stop the GIF preview");
-            }
         }
 
-        // Shows one result at full size in its own window.
-        //
-        // A 128px thumbnail cannot answer the questions that decide a download:
-        // is this banner the right shape for a background, is the art actually
-        // sharp at the size a Fullscreen theme will scale it to, and does this
-        // GIF move enough to be worth 5 MB.
-        //
-        // This is also the only place an animated result plays. Doing it in the
-        // grid meant every visible GIF decoding at once, which crashed
-        // Playnite.
         private void Preview_Click(object sender, RoutedEventArgs e)
         {
             var button = sender as System.Windows.Controls.Button;
@@ -436,7 +483,7 @@ namespace ImageRotater.Controls
 
             try
             {
-                ShowPreviewWindow(item);
+                ShowPreview(item);
             }
             catch (Exception ex)
             {
@@ -449,175 +496,139 @@ namespace ImageRotater.Controls
             }
         }
 
-        private void ShowPreviewWindow(SteamGridDbArtwork item)
+        // Shows one result in the panel beside the grid.
+        //
+        // A panel rather than a modal window: a modal has to be dismissed
+        // before the next result can be looked at, which turns comparing two
+        // candidates into a chore. This stays open while the grid is browsed,
+        // and each preview click just replaces its contents.
+        private async void ShowPreview(SteamGridDbArtwork item)
         {
-            Window window = _api.Dialogs.CreateWindow(new WindowCreationOptions
+            StopPreview();
+
+            PreviewColumn.Width = new GridLength(320);
+            PreviewPanel.Visibility = Visibility.Visible;
+
+            PreviewTitle.Text = string.IsNullOrEmpty(item.Style) ? "Preview" : item.Style;
+            PreviewStatus.Text = item.Dimensions + "   " + item.FormatLabel;
+
+            if (!item.IsAnimated)
             {
-                ShowMinimizeButton = false,
-                ShowMaximizeButton = true,
-                ShowCloseButton = true
-            });
-
-            window.Title = $"Preview - {item.Dimensions}"
-                + (string.IsNullOrEmpty(item.Style) ? string.Empty : $" ({item.Style})");
-
-            // Sized to the artwork's own SHAPE, not to the screen.
-            //
-            // A fixed 1400x900 was nearly the whole display for something that
-            // only has to answer "is this the right image" - and it framed a
-            // 600x900 cover in a landscape window with empty space either side.
-            //
-            // The box below is a ceiling; the image is fitted inside it at its
-            // own aspect ratio, so a tall cover gets a tall window and a wide
-            // banner a wide one.
-            const double MaxPreview = 620.0;
-
-            double aspect = item.Height > 0
-                ? (double)item.Width / item.Height
-                : 1.0;
-
-            double imageWidth = aspect >= 1.0 ? MaxPreview : MaxPreview * aspect;
-            double imageHeight = aspect >= 1.0 ? MaxPreview / aspect : MaxPreview;
-
-            // Chrome and the caption line underneath, which the image does not
-            // get to occupy.
-            window.Width = imageWidth + 40;
-            window.Height = imageHeight + 90;
-            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-
-            // Uniform in BOTH directions, so the artwork fills the window it
-            // was just sized for.
-            //
-            // DownOnly left a 460x215 banner as a postage stamp in the middle
-            // of a large empty window - technically its true size, and useless
-            // for judging whether the art is any good. The window is now shaped
-            // to the image, so scaling it up to fit shows the whole thing at a
-            // size worth looking at.
-            var image = new System.Windows.Controls.Image
-            {
-                Stretch = System.Windows.Media.Stretch.Uniform,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(6)
-            };
-            // Three routes, because no single renderer covers what turns up
-            // here.
-            //
-            // A GIF plays through XamlAnimatedGif. Anything else animated -
-            // which on SteamGridDB means WebP with a WebM thumbnail - has to be
-            // converted first, since WPF can decode neither and XamlAnimatedGif
-            // handles only GIF. A still just loads.
-            System.Windows.Controls.MediaElement video = null;
-
-            if (item.IsGif && item.UrlUri != null)
-            {
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, item.UrlUri);
-            }
-            else if (item.IsAnimated && PreviewCache.IsAvailable)
-            {
-                video = new System.Windows.Controls.MediaElement
-                {
-                    LoadedBehavior = System.Windows.Controls.MediaState.Manual,
-                    IsMuted = true,
-                    Stretch = System.Windows.Media.Stretch.Uniform,
-                    Margin = new Thickness(6)
-                };
-
-                // Loops, since these are short clips and a preview that plays
-                // once then freezes looks broken.
-                video.MediaEnded += (s, e) =>
-                {
-                    try
-                    {
-                        video.Position = TimeSpan.Zero;
-                        video.Play();
-                    }
-                    catch (Exception)
-                    {
-                    }
-                };
-            }
-            else
-            {
-                try
-                {
-                    image.Source = new System.Windows.Media.Imaging.BitmapImage(
-                        new Uri(item.Url, UriKind.Absolute));
-                }
-                catch (Exception)
-                {
-                    // WPF has no WebP decoder, so a still WebP throws here.
-                    // The caption still reports what it is.
-                }
+                ShowStill(item);
+                return;
             }
 
-            // The true dimensions matter more now that the preview is scaled -
-            // this is the only place the user learns whether a good-looking
-            // image is actually big enough for a Fullscreen background.
-            var status = new System.Windows.Controls.TextBlock
+            // Animated content goes through the web view.
+            //
+            // Not MediaElement: setting its Source succeeds and it then dies
+            // with a NullReferenceException inside MediaPlayerState while
+            // rendering, taking the window with it. Reproduced outside Playnite
+            // for both a remote URL and a local file, so it is the control
+            // rather than the media.
+            //
+            // The web view also plays WebM and animated WebP, which MediaElement
+            // never could - so ffmpeg conversion is now an optimisation rather
+            // than the only route.
+            int generation = ++_previewGeneration;
+
+            bool ready = await EnsurePreviewRendererAsync();
+
+            if (generation != _previewGeneration)
             {
-                Text = $"{item.Dimensions}   {item.Mime}",
-                Margin = new Thickness(10, 6, 10, 8),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = System.Windows.Media.Brushes.Gray,
-                FontSize = 11
-            };
-
-            var layout = new System.Windows.Controls.DockPanel();
-            System.Windows.Controls.DockPanel.SetDock(status, System.Windows.Controls.Dock.Bottom);
-            layout.Children.Add(status);
-            layout.Children.Add(video ?? (UIElement)image);
-
-            window.Content = layout;
-
-            // Converting takes a second or two, so it happens after the window
-            // is up rather than freezing the click that opened it.
-            if (video != null)
-            {
-                string sourceUrl = item.MotionPreviewUrl;
-                status.Text = "Preparing preview...";
-
-                System.Threading.Tasks.Task.Run(() => PreviewCache.GetPlayableCopy(sourceUrl))
-                    .ContinueWith(t =>
-                    {
-                        string playable = t.Result;
-
-                        if (string.IsNullOrEmpty(playable))
-                        {
-                            status.Text = $"{item.Dimensions}   {item.Mime}   (no preview available)";
-                            return;
-                        }
-
-                        video.Source = new Uri(playable);
-                        video.Play();
-                        status.Text = $"{item.Dimensions}   {item.Mime}";
-                    },
-                    System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+                return;
             }
 
-            // Release the animation on close, or a GIF keeps decoding for the
-            // life of the session behind a window nobody can see.
-            // Both renderers released, or a preview keeps decoding for the rest
-            // of the session behind a closed window.
-            window.Closed += (s, e) =>
+            if (!ready)
             {
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(image, null);
+                // No runtime. The still frame is the honest fallback, and the
+                // caption says why there is no motion.
+                ShowStill(item);
 
-                if (video != null)
-                {
-                    try
-                    {
-                        video.Stop();
-                        video.Close();
-                        video.Source = null;
-                    }
-                    catch (Exception)
-                    {
-                    }
-                }
-            };
+                PreviewStatus.Text = item.Dimensions + "   " + item.FormatLabel
+                    + "   (animated preview needs the WebView2 runtime)";
 
-            window.ShowDialog();
+                return;
+            }
+
+            PreviewImage.Visibility = Visibility.Collapsed;
+
+            // GIF and animated WebP are IMAGES to a browser; only real video
+            // goes in a <video> tag.
+            bool isVideo = item.FormatLabel == "MP4"
+                || item.FormatLabel == "WEBM";
+
+            _previewRenderer.Show(item.MotionPreviewUrl ?? item.Url, isVideo);
+        }
+
+        private void ShowStill(SteamGridDbArtwork item)
+        {
+            if (_previewRenderer != null)
+            {
+                _previewRenderer.Clear();
+            }
+
+            PreviewImage.Visibility = Visibility.Visible;
+
+            try
+            {
+                PreviewImage.Source = new System.Windows.Media.Imaging.BitmapImage(
+                    new Uri(item.Url, UriKind.Absolute));
+            }
+            catch (Exception)
+            {
+                // WPF has no WebP or AVIF decoder, so those throw here. The
+                // caption still says what the format is.
+                PreviewImage.Source = null;
+
+                PreviewStatus.Text = item.Dimensions + "   " + item.FormatLabel
+                    + "   (Windows cannot display this format)";
+            }
+        }
+
+        // Built on first use rather than at construction: creating the
+        // environment costs a folder and a process, and most previews are of
+        // still images that never need it.
+        private async Task<bool> EnsurePreviewRendererAsync()
+        {
+            if (_previewRenderer == null)
+            {
+                _previewRenderer = new PreviewRenderer(_pluginUserDataPath);
+
+                // Into the tree BEFORE initialising: the core cannot be created
+                // for a control that has no window behind it.
+                PreviewVideoHost.Content = _previewRenderer.CreateControl();
+                PreviewVideoHost.UpdateLayout();
+            }
+
+            return await _previewRenderer.InitialiseAsync();
+        }
+
+        private PreviewRenderer _previewRenderer;
+
+        // Bumped whenever a new preview starts, so a slow web view startup that
+        // finishes late cannot play over a different result.
+        private int _previewGeneration;
+
+        private void PreviewClose_Click(object sender, RoutedEventArgs e)
+        {
+            StopPreview();
+
+            PreviewPanel.Visibility = Visibility.Collapsed;
+            PreviewColumn.Width = new GridLength(0);
+        }
+
+        // Releases the preview. Not merely hidden: a hidden video keeps
+        // decoding, which is the cost being avoided.
+        private void StopPreview()
+        {
+            _previewGeneration++;
+
+            if (_previewRenderer != null)
+            {
+                _previewRenderer.Clear();
+            }
+
+            PreviewImage.Source = null;
         }
 
         private void NextPage_Click(object sender, RoutedEventArgs e)
@@ -628,6 +639,23 @@ namespace ImageRotater.Controls
         private void PreviousPage_Click(object sender, RoutedEventArgs e)
         {
             _model.PreviousPage();
+        }
+
+        // The animated filter applies as it is ticked, rather than waiting for
+        // Apply or the next search.
+        //
+        // It filters what is ALREADY on screen - no request is involved - so
+        // making the user press a second button to see the effect was pure
+        // ceremony, and made the checkbox look broken.
+        private void AnimatedFilter_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!IsLoaded)
+            {
+                return;
+            }
+
+            _model.Filter.ShowAnimated = ShowAnimatedBox.IsChecked == true;
+            _model.ApplyFilter();
         }
 
         private void ApplyFilters_Click(object sender, RoutedEventArgs e)
@@ -679,8 +707,17 @@ namespace ImageRotater.Controls
                 DownloadButton.IsEnabled = true;
             }
 
+            // Say what was actually fetched. A video download runs yt-dlp and
+            // a remux behind this button, and reporting it as "images" made a
+            // user reasonably conclude the conversion step never happened.
+            int videos = chosen.Count(c => c.IsYouTube || c.CanStreamDirectly && c.IsAnimated);
+
+            string what = videos == chosen.Count
+                ? "video(s)"
+                : videos > 0 ? "file(s)" : "image(s)";
+
             _model.Status = saved == chosen.Count
-                ? $"Downloaded {saved} image(s)."
+                ? $"Downloaded and converted {saved} {what}."
                 : $"Downloaded {saved} of {chosen.Count}. See the Playnite log for the rest.";
         }
 

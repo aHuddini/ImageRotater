@@ -125,6 +125,16 @@ Get-ChildItem -Path $outputDir -File | Where-Object {
     Copy-Item $_.FullName -Destination $packageDir
 }
 
+# WebView2's native loader, which lives in a runtimes/ subtree rather than
+# beside the managed DLLs - so the file copy above misses it entirely. Without
+# it the managed wrapper ships fine and then cannot reach the runtime at all,
+# and every animated preview silently falls back to a still frame.
+$runtimesDir = Join-Path $outputDir "runtimes"
+if (Test-Path $runtimesDir) {
+    Copy-Item $runtimesDir -Destination $packageDir -Recurse -Force
+    Write-Host "  (included WebView2 native loaders)" -ForegroundColor Gray
+}
+
 # extension.yaml and icon.png must sit at the package root
 Copy-Item $manifestPath -Destination $packageDir -Force
 $iconPath = Join-Path $projectRoot "icon.png"

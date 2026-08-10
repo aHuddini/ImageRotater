@@ -166,10 +166,12 @@ namespace ImageRotater.Tests.Services
             Assert.AreEqual(1, ArtworkFilter.Apply(artwork, filter).Count);
         }
 
-        // Animated formats cannot be rendered yet, so downloading one would
-        // produce a broken-image placeholder.
+        // Animated results are SHOWN by default. They render and preview
+        // correctly now, and animated artwork is the reason most people open
+        // this dialog - hiding it meant the best results were invisible unless
+        // the user knew to go and find the checkbox.
         [Test]
-        public void Apply_HidesAnimatedByDefault()
+        public void Apply_ShowsAnimatedByDefault()
         {
             var artwork = new List<SteamGridDbArtwork>
             {
@@ -191,10 +193,15 @@ namespace ImageRotater.Tests.Services
                 Art(3, mime: "image/apng")
             };
 
-            var result = ArtworkFilter.Apply(artwork, new ArtworkFilterState());
+            Assert.AreEqual(3, ArtworkFilter.Apply(artwork, new ArtworkFilterState()).Count);
 
-            Assert.AreEqual(1, result.Count);
-            Assert.AreEqual(1, result[0].Id);
+            // Unticking the box still hides them, which is the whole point of
+            // it still being there.
+            var hidden = ArtworkFilter.Apply(
+                artwork, new ArtworkFilterState { ShowAnimated = false });
+
+            Assert.AreEqual(1, hidden.Count);
+            Assert.AreEqual(1, hidden[0].Id);
         }
 
         // The other half of that rule: a STILL WebP must survive the default

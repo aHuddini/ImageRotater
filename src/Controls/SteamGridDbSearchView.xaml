@@ -27,14 +27,35 @@
             <TabControl x:Name="SourceTabs"
                         Margin="0,0,0,8"
                         SelectionChanged="SourceTabs_SelectionChanged">
+                <!-- Ordered by how reliably the result can actually be shown.
+                     Steam serves plain JPEG that WPF decodes natively, needs no
+                     API key and no external tool - so it is the one that always
+                     works, and goes first. SteamGridDB has far more choice but
+                     its animated results are WebP with WebM thumbnails, which
+                     WPF cannot decode without ffmpeg. Web search is anything at
+                     all. YouTube needs yt-dlp on top. -->
+                <TabItem x:Name="SteamTab" Header="Steam">
+                    <TextBlock x:Name="SteamTabNote"
+                               Text="Steam's own library artwork. Works for any game Steam sells, whichever store your copy came from. No key needed."
+                               FontSize="11"
+                               Foreground="Gray"
+                               Margin="6,4"/>
+                </TabItem>
                 <TabItem x:Name="SteamGridDbTab" Header="SteamGridDB">
-                    <TextBlock Text="Curated game artwork, filtered by shape and style."
+                    <TextBlock Text="Curated game artwork, filtered by shape and style. Animated results need ffmpeg to preview."
                                FontSize="11"
                                Foreground="Gray"
                                Margin="6,4"/>
                 </TabItem>
                 <TabItem x:Name="WebTab" Header="Web search">
                     <TextBlock Text="Any image on the web. Quality and shape vary, so check the size before picking."
+                               FontSize="11"
+                               Foreground="Gray"
+                               Margin="6,4"/>
+                </TabItem>
+                <TabItem x:Name="YouTubeTab" Header="YouTube">
+                    <TextBlock x:Name="YouTubeTabNote"
+                               Text="Live wallpaper videos, saved as MP4. Needs yt-dlp, ffmpeg and deno - see the Setup tab in settings."
                                FontSize="11"
                                Foreground="Gray"
                                Margin="6,4"/>
@@ -74,6 +95,10 @@
                      user rarely touches. The Filters button restores it. -->
                 <ColumnDefinition x:Name="FiltersColumn" Width="220"/>
                 <ColumnDefinition Width="*"/>
+                <!-- Preview panel. Starts collapsed and opens when a result's
+                     preview button is pressed - a permanently empty third of
+                     the dialog would be worse than no panel at all. -->
+                <ColumnDefinition x:Name="PreviewColumn" Width="0"/>
             </Grid.ColumnDefinitions>
 
             <!-- Filters, built from whatever the current results contain -->
@@ -127,8 +152,18 @@
                          theme rather than on the plugin, so it went stale the
                          moment a theme changed. -->
                     <TextBlock Text="Animation" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <!-- On by default now that animated results no longer crash
+                         the preview. Animated artwork is the reason most people
+                         open this dialog, and hiding it behind a filter meant
+                         the good results were invisible until you knew to ask.
+
+                         Applies as it is ticked, rather than waiting for the
+                         next search: it filters what is already on screen. -->
                     <CheckBox x:Name="ShowAnimatedBox"
                               Content="Look for animated content"
+                              IsChecked="True"
+                              Checked="AnimatedFilter_Changed"
+                              Unchecked="AnimatedFilter_Changed"
                               Margin="0,2"/>
 
                     <!-- On by default. Smaller on disk, and MP4 plays through
@@ -262,6 +297,24 @@
                                                                Foreground="White"/>
                                                 </Border>
 
+                                                <!-- Length, on video results only.
+                                                     A background loops, so a 20-second
+                                                     clip reads very differently from a
+                                                     ten-minute one - and it is the only
+                                                     hint before committing to a download. -->
+                                                <Border Visibility="{Binding IsYouTube, Converter={StaticResource BoolToVisibility}}"
+                                                        HorizontalAlignment="Right"
+                                                        VerticalAlignment="Bottom"
+                                                        Margin="4"
+                                                        Padding="4,1"
+                                                        CornerRadius="3"
+                                                        Background="#B0000000">
+                                                    <TextBlock Text="{Binding DurationText}"
+                                                               FontSize="10"
+                                                               FontWeight="Bold"
+                                                               Foreground="White"/>
+                                                </Border>
+
                                                 <!-- Only shown once selected, so an
                                                      unpicked grid stays uncluttered. -->
                                                 <Border x:Name="Tick"
@@ -301,9 +354,19 @@
                                                         Focusable="False"/>
                                             </Grid>
 
-                                            <TextBlock Text="{Binding Dimensions}"
-                                                       HorizontalAlignment="Center"
-                                                       Margin="0,4,0,0"/>
+                                            <!-- Size and the real file format. The
+                                                 format matters because WPF cannot
+                                                 display all of them - a WEBP will
+                                                 not show here even though it
+                                                 downloads fine. -->
+                                            <StackPanel Orientation="Horizontal"
+                                                        HorizontalAlignment="Center"
+                                                        Margin="0,4,0,0">
+                                                <TextBlock Text="{Binding Dimensions}"/>
+                                                <TextBlock Text="{Binding FormatLabel}"
+                                                           Margin="6,0,0,0"
+                                                           Foreground="Gray"/>
+                                            </StackPanel>
                                             <TextBlock Text="{Binding Style}"
                                                        HorizontalAlignment="Center"
                                                        FontSize="11"
@@ -341,6 +404,59 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
+
+            <!-- Preview panel.
+                 In the dialog rather than a modal window on purpose: a modal
+                 has to be dismissed before the next result can be looked at,
+                 which makes comparing two candidates a chore. This stays open
+                 while the grid is browsed. -->
+            <Border x:Name="PreviewPanel"
+                    Grid.Column="2"
+                    Margin="12,0,0,0"
+                    Padding="8"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource NormalBorderBrush}"
+                    Visibility="Collapsed">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <Button x:Name="PreviewCloseButton"
+                                Content="&#x2715;"
+                                DockPanel.Dock="Right"
+                                Width="24"
+                                Height="24"
+                                Padding="0"
+                                ToolTip="Close preview"
+                                Click="PreviewClose_Click"/>
+                        <TextBlock x:Name="PreviewTitle"
+                                   Text="Preview"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </DockPanel>
+
+                    <TextBlock x:Name="PreviewStatus"
+                               DockPanel.Dock="Bottom"
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"/>
+
+                    <!-- Both renderers live here; whichever is unused stays
+                         collapsed. Swapping children at runtime instead would
+                         mean rebuilding the visual tree on every preview. -->
+                    <Grid>
+                        <Image x:Name="PreviewImage"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                        <!-- The web view is added here in code, not markup.
+                             It needs its environment created before it can be
+                             initialised, and that is async - which XAML cannot
+                             express. See PreviewRenderer. -->
+                        <ContentControl x:Name="PreviewVideoHost"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
         </Grid>
 
         <!-- Status + actions -->
