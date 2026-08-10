@@ -59,6 +59,18 @@ namespace ImageRotater.Models
         // downloader hashes the URL for those instead.
         public bool IsFromWeb { get; set; }
 
+        // Set for YouTube results, where Url is a WATCH PAGE rather than a
+        // file. Fetching it directly would save the HTML, so the downloader
+        // has to route these through yt-dlp instead.
+        //
+        // Thumbnail and dimensions still work normally: the tile shows the
+        // video's poster frame, which is an ordinary JPEG.
+        public bool IsYouTube { get; set; }
+
+        // Shown on the tile for video results - a background loops, so length
+        // is the one thing worth knowing before downloading.
+        public string DurationText { get; set; }
+
         // "1920x1080" - used as a filter value and shown in the UI.
         public string Dimensions
         {
@@ -111,6 +123,100 @@ namespace ImageRotater.Models
             }
         }
 
+
+        // The actual file format, for the tile and the preview caption.
+        //
+        // Reads the URL's extension first and falls back to the MIME type.
+        // Neither alone is enough: web results carry no MIME at all, and
+        // SteamGridDB reports still and animated WebP identically - so the
+        // label says PNG or WEBM rather than "web" or "alternate", which told
+        // the user nothing about whether the file would even display.
+        public string FormatLabel
+        {
+            get
+            {
+                string fromUrl = ExtensionOf(Url);
+
+                if (fromUrl != null)
+                {
+                    return fromUrl;
+                }
+
+                if (string.IsNullOrEmpty(Mime))
+                {
+                    return "?";
+                }
+
+                // "image/webp" -> "WEBP"
+                int slash = Mime.LastIndexOf('/');
+
+                return (slash >= 0 && slash < Mime.Length - 1
+                    ? Mime.Substring(slash + 1)
+                    : Mime).ToUpperInvariant();
+            }
+        }
+
+        private static string ExtensionOf(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+            {
+                return null;
+            }
+
+            // A YouTube watch page has no extension, and a Steam URL may carry
+            // a ?t= cache-buster after one.
+            string path = url;
+
+            int query = path.IndexOf('?');
+            if (query > 0)
+            {
+                path = path.Substring(0, query);
+            }
+
+            int dot = path.LastIndexOf('.');
+            int slash = path.LastIndexOf('/');
+
+            if (dot <= slash || dot == path.Length - 1)
+            {
+                return null;
+            }
+
+            string extension = path.Substring(dot + 1);
+
+            // Guards against a dot in a domain or a hash rather than a real
+            // extension - "jpeg" is the longest one that turns up here.
+            return extension.Length <= 4 ? extension.ToUpperInvariant() : null;
+        }
+
+        // Whether MediaElement can play this straight off the web, with no
+        // download and no conversion first.
+        //
+        // True for MP4 - Steam trailers and YouTube results - and for GIF,
+        // which MediaElement also decodes. False for the WebP and VP9 WebM
+        // SteamGridDB serves, which need ffmpeg before anything can show them
+        // moving.
+        //
+        // Worth asking as one question because it decides the whole preview
+        // path: streaming starts playing in about a second, while the
+        // conversion route downloads the file, shells out to ffmpeg and writes
+        // a temp copy before the first frame appears.
+        public bool CanStreamDirectly
+        {
+            get
+            {
+                if (IsGif)
+                {
+                    return true;
+                }
+
+                if (string.IsNullOrEmpty(Mime))
+                {
+                    return false;
+                }
+
+                return Mime.IndexOf("mp4", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+        }
 
         // The URL worth fetching to SHOW motion.
         //
