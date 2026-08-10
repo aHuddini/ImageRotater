@@ -33,6 +33,7 @@
                       UnloadedBehavior="Stop"
                       IsMuted="True"
                       ScrubbingEnabled="False"
+                      MediaOpened="DisplayVideo_MediaOpened"
                       MediaEnded="DisplayVideo_MediaEnded"
                       MediaFailed="DisplayVideo_MediaFailed"/>
 

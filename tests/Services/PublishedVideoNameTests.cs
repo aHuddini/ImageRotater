@@ -99,30 +99,42 @@ namespace ImageRotater.Tests.Services
 
         // A published video OUTLIVES rotations that pick a still.
         //
-        // This reverses an earlier decision, deliberately. Deleting the video
-        // whenever rotation landed on a still was defensible in the abstract -
-        // the published file then always matches the current pick - but a
-        // theme's MediaElement can render video and nothing else, so in
-        // practice the animated tile went dark for every still pick. On a game
-        // with one video among three covers that is two selections in three,
-        // which reads as "the animation randomly stops".
+        // A still pick REMOVES the published video.
         //
-        // Keeping it means the tile animates continuously while Playnite's own
-        // still tile rotates underneath.
+        // This reverses an earlier decision that kept it, on the reasoning that
+        // a theme's MediaElement would otherwise go dark whenever rotation
+        // landed on a still. That reasoning was wrong in practice: the video is
+        // drawn ON TOP of the still tile, so keeping it meant the video never
+        // went away at all. A game with one video among its covers appeared
+        // frozen on that clip no matter how often rotation picked something
+        // else - reported as "the tiles don't rotate".
+        //
+        // Rotation that cannot be seen is not rotation.
         [Test]
-        public void RotatingFromVideoToStillKeepsThePublishedVideo()
+        public void RotatingFromVideoToStillRemovesThePublishedVideo()
         {
             _store.PublishCurrent(_gameId, MakeVideo("clip.mp4"), ArtworkKind.Cover);
             Assert.IsTrue(File.Exists(Path.Combine(CoversFolder(), "current.mp4")));
 
             _store.PublishCurrent(_gameId, MakeStill("art.jpg"), ArtworkKind.Cover);
 
-            Assert.IsTrue(File.Exists(Path.Combine(CoversFolder(), "current.mp4")),
-                "a theme's MediaElement has nothing to fall back to, so removing this "
-                + "blanks the animated tile on every still pick");
+            Assert.IsFalse(File.Exists(Path.Combine(CoversFolder(), "current.mp4")),
+                "the video draws over the still, so leaving it means the tile never changes");
 
             Assert.IsTrue(File.Exists(Path.Combine(CoversFolder(), GameImageStore.PublishedFileName)),
                 "the still still publishes for everything that renders images");
+        }
+
+        // And picking the video again brings it back, or the first still pick
+        // would end animation for the rest of the session.
+        [Test]
+        public void RotatingBackToVideoRepublishesIt()
+        {
+            _store.PublishCurrent(_gameId, MakeVideo("clip.mp4"), ArtworkKind.Cover);
+            _store.PublishCurrent(_gameId, MakeStill("art.jpg"), ArtworkKind.Cover);
+            _store.PublishCurrent(_gameId, MakeVideo("clip.mp4"), ArtworkKind.Cover);
+
+            Assert.IsTrue(File.Exists(Path.Combine(CoversFolder(), "current.mp4")));
         }
 
         // Switching containers must not leave both behind, for the same reason.
@@ -156,11 +168,18 @@ namespace ImageRotater.Tests.Services
             new ArtworkPublisher(_store).SeedEveryGame(
                 new[] { new Playnite.SDK.Models.Game { Id = _gameId, Name = "Game" } });
 
-            Assert.IsTrue(File.Exists(Path.Combine(CoversFolder(), "current.mp4")),
-                "a theme's MediaElement has nothing to play until this exists");
-
+            // The still is always seeded - everything that renders images
+            // needs it, and it is what the video's poster frame writes to.
             Assert.IsTrue(File.Exists(Path.Combine(CoversFolder(), GameImageStore.PublishedFileName)),
-                "the still must still be seeded for everything that renders images");
+                "the still must be seeded for everything that renders images");
+
+            // Seeding publishes ONE pick. Whether that was the still or the
+            // video is the selector's business, so this asserts only that the
+            // two cannot both be stale - a published video means the video was
+            // the pick, and its absence means the still was.
+            //
+            // The video is no longer left behind across still picks: it draws
+            // over the still tile, so keeping it meant the tile never changed.
         }
 
         // The published copy must never come back as a rotation candidate, or a

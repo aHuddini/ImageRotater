@@ -91,7 +91,6 @@ namespace ImageRotater.Tests.Services
             return new ImageRotaterSettings
             {
                 EnableRotation = true,
-                DisplayMode = DisplayMode.UpdatePlayniteBackground,
                 SelectionMode = SelectionMode.EverySelection,
                 RotateCovers = rotateCovers,
                 UseCoverControl = useCoverControl
@@ -225,7 +224,6 @@ namespace ImageRotater.Tests.Services
         public void ThemeElementDisplayMode_StillRotatesBackgrounds()
         {
             var settings = Settings(rotateCovers: true, useCoverControl: false);
-            settings.DisplayMode = DisplayMode.ThemeElement;
 
             Build(settings).ApplyTo(_game);
 

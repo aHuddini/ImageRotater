@@ -248,7 +248,12 @@ namespace ImageRotater.Controls
                 //
                 // Three attempts at reimplementing that fade here all traded
                 // one artefact for another. There is nothing to reimplement.
-                StopVideo();
+                //
+                // Faded out rather than cut, when a video was on screen: the
+                // still underneath arrives through Playnite's own crossfade,
+                // and this layer vanishing in one frame over that dissolve was
+                // the one hard edge left in the transition.
+                FadeOutVideoThenStop();
                 ShowNothing();
                 ImageDiagnostics.LogApplied(game.Name, path, _settings, bucket, 0);
             }
@@ -292,9 +297,47 @@ namespace ImageRotater.Controls
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
+            // Starts invisible and fades up once the first frame exists (see
+            // MediaOpened). A MediaElement renders nothing until then, so
+            // showing it at full opacity meant a black rectangle covering
+            // whatever Playnite was still displaying - and the still-to-video
+            // switch read as a hard cut through black.
+            DisplayVideo.BeginAnimation(OpacityProperty, null);
+            DisplayVideo.Opacity = 0;
+
             DisplayVideo.Source = new Uri(path);
             DisplayVideo.Visibility = Visibility.Visible;
             DisplayVideo.Play();
+        }
+
+        // Dissolves the video away over the still underneath, then releases
+        // it. Playnite crossfades the incoming still at about this rate, so
+        // the two fades read as one transition.
+        private void FadeOutVideoThenStop()
+        {
+            if (DisplayVideo.Source == null || DisplayVideo.Visibility != Visibility.Visible)
+            {
+                return;
+            }
+
+            var fade = new System.Windows.Media.Animation.DoubleAnimation(
+                DisplayVideo.Opacity, 0.0,
+                new Duration(TimeSpan.FromMilliseconds(400)));
+
+            // Guarded by the request token: if another refresh started a NEW
+            // video while this fade ran, tearing the element down now would
+            // kill the wrong playback.
+            int token = _requestToken;
+
+            fade.Completed += (s, e) =>
+            {
+                if (token == _requestToken)
+                {
+                    StopVideo();
+                }
+            };
+
+            DisplayVideo.BeginAnimation(OpacityProperty, fade);
         }
 
         // Stop AND drop the source. Stop alone leaves the file open, and the
@@ -317,10 +360,26 @@ namespace ImageRotater.Controls
 
             DisplayVideo.Source = null;
             DisplayVideo.Visibility = Visibility.Collapsed;
+
+            // Cleared, or a fade left mid-flight would pin the next video at
+            // whatever opacity this one died on.
+            DisplayVideo.BeginAnimation(OpacityProperty, null);
+            DisplayVideo.Opacity = 1.0;
         }
 
         // Loop. Artwork clips are short and meant to repeat; MediaElement has
         // no repeat property, so the end of one playback seeds the next.
+        // The first frame exists now, so the fade-up can start without ever
+        // showing the pre-roll black a MediaElement renders before its media
+        // opens.
+        private void DisplayVideo_MediaOpened(object sender, RoutedEventArgs e)
+        {
+            var fade = new System.Windows.Media.Animation.DoubleAnimation(
+                0.0, 1.0, new Duration(TimeSpan.FromMilliseconds(400)));
+
+            DisplayVideo.BeginAnimation(OpacityProperty, fade);
+        }
+
         private void DisplayVideo_MediaEnded(object sender, RoutedEventArgs e)
         {
             try

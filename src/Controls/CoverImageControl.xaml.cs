@@ -225,8 +225,19 @@ namespace ImageRotater.Controls
             // longer the selected one. Selection moving away is announced
             // against the ARRIVING game, so the departing tile would never hear
             // it and would keep decoding frames forever.
+            //
+            // UNLESS unfocused tiles are allowed to animate - then a tile that
+            // lost selection has nothing to stop, and this branch firing anyway
+            // was a real bug: every animating unfocused tile ran a full Refresh
+            // with its previous-pick memory wiped on EVERY selection move,
+            // which in EverySelection mode re-rolled its artwork. The user saw
+            // every tile EXCEPT the selected one rotating as they scrolled.
             bool mine = GameContext != null && GameContext.Id == gameId;
-            bool mustStandDown = _animating && !IsSelectedTile;
+
+            ImageRotaterSettings settings = _settings != null ? _settings() : null;
+
+            bool mustStandDown = _animating && !IsSelectedTile
+                && settings?.AnimateUnfocusedCovers != true;
 
             if (!mine && !mustStandDown)
             {
@@ -297,6 +308,22 @@ namespace ImageRotater.Controls
                         game.Id, candidates, _previousPick, settings.CoverSelectionMode);
                 }
 
+                // Diagnostics for the selected-tile-goes-still report: which
+                // branch this tile takes, with which path, is the whole
+                // question, and guessing at it has been wrong twice.
+                if (settings.EnableDebugLogging)
+                {
+                    bool fromRotation = string.Equals(
+                        settings.CurrentCoverGameId, game.Id.ToString(),
+                        StringComparison.OrdinalIgnoreCase);
+
+                    Logger.Debug(
+                        $"IR-cover \"{game.Name}\": selected={IsSelectedTile} "
+                        + $"fromRotation={fromRotation} "
+                        + $"motion={PosterFrame.IsMotion(path)} video={PosterFrame.IsVideo(path)} "
+                        + $"path={System.IO.Path.GetFileName(path ?? "(null)")}");
+                }
+
                 // Recorded before use, so a pick that turns out to be unusable
                 // still counts as tried and rotation moves past it.
                 _previousPick = path;
@@ -355,6 +382,11 @@ namespace ImageRotater.Controls
                 // mode of the Image.
                 if (PosterFrame.IsVideo(path))
                 {
+                    if (settings.EnableDebugLogging)
+                    {
+                        Logger.Debug($"IR-cover \"{game.Name}\": ShowVideo");
+                    }
+
                     ShowVideo(path);
                     return;
                 }
@@ -364,6 +396,11 @@ namespace ImageRotater.Controls
                 // XamlAnimatedGif's attached property, which owns Image.Source
                 // while active. Setting both would race - the one-channel rule
                 // that already bit this control once (the Content shadowing).
+                //
+                // Noted before the teardown: when a video WAS here, the still
+                // replacing it has no previous image to crossfade from, so
+                // TargetUpdated fades the incoming still itself instead.
+                _replacingVideo = DisplayVideo.Visibility == Visibility.Visible;
                 StopVideo();
 
                 if (PosterFrame.IsAnimated(path))
@@ -508,7 +545,64 @@ namespace ImageRotater.Controls
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             }
 
-            CrossfadePreviousCover();
+            // Wait for the picture to be READY, not merely delivered.
+            //
+            // TargetUpdated says the binding produced a BitmapImage, which is
+            // not the same as that image having pixels: with IsAsync the decode
+            // can still be in flight. Fading the old layer out at this point
+            // uncovers an image that has not drawn yet, which is the flash of
+            // whatever sits behind the control.
+            CrossfadeWhenReady(DisplayImage.Source as System.Windows.Media.Imaging.BitmapImage);
+        }
+
+        // Starts the crossfade once the incoming image can actually be drawn.
+        //
+        // IsDownloading covers the case that matters here - a large still, or a
+        // file on a slow disk. A BitmapImage that is already decoded reports
+        // false and the fade starts immediately, so the common case costs
+        // nothing.
+        private void CrossfadeWhenReady(System.Windows.Media.Imaging.BitmapImage bitmap)
+        {
+            if (bitmap == null || !bitmap.IsDownloading)
+            {
+                CrossfadePreviousCover();
+                return;
+            }
+
+            // Guarded by the same generation counter as the fade itself: a
+            // slow image that finishes after the user has moved on twice must
+            // not start a transition for a cover no longer on screen.
+            int generation = _fadeGeneration;
+
+            System.EventHandler onReady = null;
+            System.EventHandler<System.Windows.Media.ExceptionEventArgs> onFailed = null;
+
+            onReady = (s, e) =>
+            {
+                bitmap.DownloadCompleted -= onReady;
+                bitmap.DownloadFailed -= onFailed;
+
+                if (generation == _fadeGeneration)
+                {
+                    CrossfadePreviousCover();
+                }
+            };
+
+            // A failed decode still has to release the old layer, or it stays
+            // frozen on screen forever.
+            onFailed = (s, e) =>
+            {
+                bitmap.DownloadCompleted -= onReady;
+                bitmap.DownloadFailed -= onFailed;
+
+                if (generation == _fadeGeneration)
+                {
+                    CrossfadePreviousCover();
+                }
+            };
+
+            bitmap.DownloadCompleted += onReady;
+            bitmap.DownloadFailed += onFailed;
         }
 
         // Dissolves the outgoing layer away, revealing the cover already opaque
@@ -525,8 +619,24 @@ namespace ImageRotater.Controls
                 if (PreviousImage.Source == null ||
                     PreviousImage.Visibility != Visibility.Visible)
                 {
+                    // No outgoing image to dissolve - but if a VIDEO just left,
+                    // the still arriving in one frame was the only hard cut
+                    // this tile had. Fade the incoming image itself: the video
+                    // is gone, so there is nothing underneath to reveal early.
+                    if (_replacingVideo)
+                    {
+                        _replacingVideo = false;
+
+                        DisplayImage.BeginAnimation(
+                            OpacityProperty,
+                            new System.Windows.Media.Animation.DoubleAnimation(
+                                0.0, 1.0, new Duration(CoverFadeDuration)));
+                    }
+
                     return;
                 }
+
+                _replacingVideo = false;
 
                 var fade = new System.Windows.Media.Animation.DoubleAnimation(
                     1.0, 0.0, new Duration(CoverFadeDuration));
@@ -563,6 +673,10 @@ namespace ImageRotater.Controls
 
         private int _fadeGeneration;
 
+        // True while the still now arriving is replacing a video, so the fade
+        // runs on the incoming image - there is no outgoing layer to dissolve.
+        private bool _replacingVideo;
+
         // Matched to what Playnite's own FadeImage uses for backgrounds, so a
         // cover and a background switch at the same pace.
         private static readonly TimeSpan CoverFadeDuration =
@@ -578,6 +692,13 @@ namespace ImageRotater.Controls
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 
             ClearPreviousCover();
+
+            // Invisible until the first frame exists - MediaOpened fades it
+            // up. A MediaElement renders nothing before its media opens, so at
+            // full opacity the still-to-video switch was a hard cut through a
+            // black rectangle: the one transition on this tile with no fade.
+            DisplayVideo.BeginAnimation(OpacityProperty, null);
+            DisplayVideo.Opacity = 0;
 
             DisplayVideo.Source = new Uri(path);
             DisplayVideo.Visibility = Visibility.Visible;
@@ -616,6 +737,11 @@ namespace ImageRotater.Controls
 
             DisplayVideo.Source = null;
             DisplayVideo.Visibility = Visibility.Collapsed;
+
+            // Cleared, or a fade left mid-flight pins the next video at
+            // whatever opacity this one died on.
+            DisplayVideo.BeginAnimation(OpacityProperty, null);
+            DisplayVideo.Opacity = 1.0;
             _animating = false;
         }
 
@@ -636,6 +762,13 @@ namespace ImageRotater.Controls
         // open a moment before it loops - which looks like it failed to play.
         private void DisplayVideo_MediaOpened(object sender, RoutedEventArgs e)
         {
+            // The first frame exists now; fading from here means the black
+            // pre-roll a MediaElement renders before opening is never seen.
+            DisplayVideo.BeginAnimation(
+                OpacityProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(
+                    0.0, 1.0, new Duration(CoverFadeDuration)));
+
             if (!_startAtRandomPoint)
             {
                 return;

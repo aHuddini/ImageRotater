@@ -94,7 +94,6 @@ namespace ImageRotater.Tests.Services
             {
                 EnableRotation = true,
                 RotateCovers = true,
-                DisplayMode = DisplayMode.ThemeElement,
                 SelectionMode = SelectionMode.Fixed,
                 CoverSelectionMode = SelectionMode.Fixed,
                 LetterboxBackgrounds = false

@@ -367,6 +367,82 @@ namespace ImageRotater.Services
 
         // Makes sure the published file exists, without claiming the game has
         // artwork. Does nothing when a real image is already published.
+        // Removes published copies for games that no longer have any artwork to
+        // publish from.
+        //
+        // These outlive their source: the placeholder is written once so a
+        // theme's binding has a file to resolve, and nothing deleted it when
+        // the candidates went away. A theme then stretches a 1x1 transparent
+        // PNG across the tile, which renders as a black thumbnail.
+        //
+        // Returns how many folders were cleared.
+        public int RemoveOrphanedPublished()
+        {
+            int removed = 0;
+
+            if (string.IsNullOrEmpty(_imagesRoot) || !Directory.Exists(_imagesRoot))
+            {
+                return removed;
+            }
+
+            string[] gameFolders;
+
+            try
+            {
+                gameFolders = Directory.GetDirectories(_imagesRoot);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not list " + _imagesRoot);
+                return removed;
+            }
+
+            foreach (string gameFolder in gameFolders)
+            {
+                foreach (ArtworkKind kind in
+                    new[] { ArtworkKind.Background, ArtworkKind.Cover })
+                {
+                    string candidates = Path.Combine(
+                        gameFolder, kind == ArtworkKind.Cover ? "covers" : "backgrounds");
+
+                    // Real artwork still here, so the published copy is wanted.
+                    if (Directory.Exists(candidates) &&
+                        SafeFileCount(candidates) > 0)
+                    {
+                        continue;
+                    }
+
+                    string published = Path.Combine(
+                        gameFolder,
+                        (kind == ArtworkKind.Cover ? "covers" : "backgrounds")
+                            + PublishedFolderSuffix);
+
+                    if (!Directory.Exists(published))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        Directory.Delete(published, true);
+                        removed++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(ex, "ImageRotater: could not remove " + published);
+                    }
+                }
+            }
+
+            return removed;
+        }
+
+        private static int SafeFileCount(string folder)
+        {
+            try { return Directory.GetFiles(folder).Length; }
+            catch (Exception) { return 0; }
+        }
+
         public bool EnsurePublishedPlaceholder(Guid gameId, ArtworkKind kind)
         {
             try
@@ -423,23 +499,41 @@ namespace ImageRotater.Services
                     folder,
                     video ? PublishedVideoNameFor(sourcePath) : PublishedFileName);
 
-                // A published video survives rotations that pick a still, and is
-                // only ever replaced by another video.
+                // A still pick REMOVES any published video, and a video pick
+                // replaces it.
                 //
-                // A theme's MediaElement can render video and nothing else, so
-                // deleting this whenever rotation landed on a still meant the
-                // animated tile went dark for every non-video pick - on a game
-                // with one video among three covers, two selections in three.
-                // Keeping it means the tile keeps animating while Playnite's own
-                // still tile rotates underneath, which is the behaviour a theme
-                // that bothered to add a MediaElement is asking for.
+                // This used to keep the video across still picks, reasoning
+                // that a theme's MediaElement would otherwise go dark whenever
+                // rotation landed on a still. That was wrong in practice: the
+                // video is drawn ON TOP of the still tile, so keeping it meant
+                // the video simply never went away. A game with a video among
+                // its covers appeared frozen on that one clip no matter how
+                // many times rotation picked something else.
                 //
-                // Still cleared when the video itself changes container, or the
-                // theme would find two published videos and no rule for
-                // choosing.
-                if (video)
+                // Rotation that cannot be seen is not rotation. Clearing the
+                // video lets the still show, and the next pick that lands on
+                // the video brings it back.
+                if (!video)
+                {
+                    RemovePublishedVideos(folder);
+                }
+                else
                 {
                     RemovePublishedVideos(folder, keep: Path.GetFileName(target));
+
+                    // A poster frame for the .tile a theme binds.
+                    //
+                    // Publishing only the video left that file on its 1x1
+                    // transparent placeholder, which a theme stretches across
+                    // the tile and Playnite renders as SOLID BLACK - so a
+                    // downloaded video looked like broken artwork on every
+                    // theme whose tile is a plain Image rather than a
+                    // MediaElement.
+                    //
+                    // Needs ffmpeg. Without it the placeholder stays, which is
+                    // the pre-existing behaviour rather than a new failure.
+                    GifConverter.ExtractPoster(
+                        sourcePath, Path.Combine(folder, PublishedFileName));
                 }
 
                 // Already current - skip the copy. Session mode republishes the

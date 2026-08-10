@@ -100,7 +100,6 @@ namespace ImageRotater.Tests.Services
             return new ImageRotaterSettings
             {
                 EnableRotation = true,
-                DisplayMode = DisplayMode.UpdatePlayniteBackground,
                 SelectionMode = SelectionMode.EverySelection,
                 RotateCovers = false
             };
