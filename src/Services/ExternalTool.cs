@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using Playnite.SDK;
 
@@ -104,7 +105,54 @@ namespace ImageRotater.Services
             return null;
         }
 
+        // Makes a tool discoverable to a CHILD process by putting its folder on
+        // that process's PATH.
+        //
+        // This is how deno reaches yt-dlp. yt-dlp needs a JavaScript runtime to
+        // answer YouTube's nsig and PO-token challenges, and looks for one on
+        // PATH by name - there is no argument to point it at a specific
+        // binary. Prepending the folder is the supported way to supply one
+        // without requiring the user to alter their system PATH.
+        //
+        // Only touches the child's environment, never this process's.
+        public static void PrependToolDirToPath(ProcessStartInfo psi, string toolExePath)
+        {
+            if (psi == null || string.IsNullOrWhiteSpace(toolExePath))
+            {
+                return;
+            }
+
+            try
+            {
+                if (!File.Exists(toolExePath))
+                {
+                    return;
+                }
+
+                string dir = Path.GetDirectoryName(toolExePath);
+
+                if (string.IsNullOrEmpty(dir))
+                {
+                    return;
+                }
+
+                string current = psi.EnvironmentVariables.ContainsKey("PATH")
+                    ? psi.EnvironmentVariables["PATH"]
+                    : Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+
+                // Prepended, so the chosen copy wins over any other on PATH.
+                psi.EnvironmentVariables["PATH"] = dir + Path.PathSeparator + current;
+            }
+            catch (Exception ex)
+            {
+                // Not fatal on its own: the child may still find the tool
+                // through the inherited PATH.
+                Logger.Warn(ex, $"ImageRotater: could not put {toolExePath} on the child PATH");
+            }
+        }
+
         public const string FfmpegExe = "ffmpeg.exe";
         public const string YtDlpExe = "yt-dlp.exe";
+        public const string DenoExe = "deno.exe";
     }
 }
