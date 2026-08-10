@@ -338,11 +338,20 @@ namespace ImageRotater.Services
             // Rotation decides WHICH image; the publisher decides how a theme
             // gets at it.
             //
-            // "picked", not "path": the poster substitution above is for
-            // Playnite's database, which decodes to a single bitmap. A theme
-            // renders the published file itself, and the plugin's own controls
-            // animate it, so it must receive the real animated file.
-            _publisher?.Publish(game, picked, kind, settings);
+            // Motion publishes the REAL file - a theme renders the published
+            // copy itself, so an animated pick must arrive animated, not as
+            // the poster substituted for Playnite's database.
+            //
+            // A STILL publishes the transformed path instead. It used to
+            // publish the raw pick here too, which quietly meant letterboxing
+            // never reached a theme at all: Fullscreen themes bind the
+            // published tile, so the option visibly did nothing in Fullscreen
+            // while Desktop (which renders the database value) obeyed it.
+            _publisher?.Publish(
+                game,
+                PosterFrame.IsMotion(picked) ? picked : path,
+                kind,
+                settings);
 
             string previous;
             if (_lastWritten.TryGetValue(WrittenKey(game.Id, kind), out previous) &&

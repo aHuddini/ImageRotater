@@ -52,6 +52,7 @@ namespace ImageRotater
         // on again since - see PlayniteBackgroundWriter.SelectionGeneration.
         private int _selectionGeneration;
         private DateTime _backgroundDue = DateTime.MaxValue;
+        private DateTime _lastFadeRetime = DateTime.MinValue;
         private DateTime _coverDue = DateTime.MaxValue;
 
         // Below this, slideshow ticks become write churn - every tick imports
@@ -82,6 +83,11 @@ namespace ImageRotater
             // which keeps it usable from the bulk conversion and the tests
             // without dragging the whole plugin along.
             GifConverter.ConfiguredPath = Settings?.FfmpegPath;
+
+            // A getter, not a snapshot: a settings save replaces the whole
+            // object, so a captured one would leave YouTube downloads using
+            // tool paths the user has since corrected.
+            ArtworkDownloader.SettingsSource = () => Settings;
             // The logger owns the enabled check, so no call site repeats it.
             _fileLogger = new FileLogger(
                 GetPluginUserDataPath(), () => Settings?.EnableDebugLogging == true);
@@ -127,6 +133,22 @@ namespace ImageRotater
             // counter is the only thing that distinguishes "one selection
             // behind", which is normal, from "two or more", which is the bug.
             _writer.SelectionGeneration = () => _selectionGeneration;
+
+            // Backgrounds are levelled to one width per game, because Playnite
+            // blurs at a fixed radius after scaling - see NormaliseIfBackground.
+            _writer.NormaliseBackgrounds = () => Settings?.NormaliseBackgroundSize == true;
+
+            _writer.ScreenWidth = () =>
+            {
+                try
+                {
+                    return (int)System.Windows.SystemParameters.PrimaryScreenWidth;
+                }
+                catch (Exception)
+                {
+                    return 0;
+                }
+            };
             // The writer is handed over so the preserver can recognise artwork
             // this plugin wrote and leave it alone.
             _preserver = new OriginalArtPreserver(api, _store, _writer);
@@ -143,6 +165,7 @@ namespace ImageRotater
             // selected until the user navigated away and back.
             _menuHandler = new ImageMenuHandler(
                 api, _store, _sessionCache, _steamGridDb, _downloader,
+                () => Settings,
                 gameId => _rotationService.Forget(gameId));
 
             Properties = new GenericPluginProperties
@@ -220,6 +243,16 @@ namespace ImageRotater
 
         public override void OnGameSelected(OnGameSelectedEventArgs args)
         {
+            // Views rebuild their FadeImages when the user switches layouts,
+            // and a rebuilt instance carries stock timing again. Rescanning is
+            // idempotent and skips patched instances, so a light throttle is
+            // all the restraint it needs.
+            if ((DateTime.UtcNow - _lastFadeRetime).TotalSeconds > 10)
+            {
+                _lastFadeRetime = DateTime.UtcNow;
+                FadeImageTuner.Apply();
+            }
+
             Game selected = args?.NewValue?.FirstOrDefault();
 
             // Bumped FIRST, before any rotation runs.
@@ -885,6 +918,21 @@ namespace ImageRotater
                 PlayniteApi.ApplicationInfo.Mode.ToString(),
                 Settings);
 
+            // Playnite's own crossfade dips a quarter dark at the midpoint of
+            // every background change - see FadeImageTuner. Retimed after the
+            // window has built its template; Background priority queues this
+            // behind that work rather than racing it.
+            try
+            {
+                Application.Current?.Dispatcher.BeginInvoke(
+                    new Action(() => FadeImageTuner.Apply()),
+                    System.Windows.Threading.DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not schedule the fade retime");
+            }
+
             // Before any tile renders. Themes load these with OnLoad, which
             // throws FileNotFoundException on a missing file - inside
             // FullscreenTilePanel.MeasureOverride, which is fatal. Seeding
@@ -950,6 +998,252 @@ namespace ImageRotater
             {
                 Logger.Error(ex, "ImageRotater: could not restore artwork on shutdown");
             }
+        }
+
+        // Converts every GIF the plugin holds to MP4.
+        public void ConvertGifsToMp4()
+        {
+            if (!GifConverter.IsAvailable)
+            {
+                PlayniteApi.Dialogs.ShowErrorMessage(
+                    "This needs ffmpeg. Set its path on the Setup tab first.", "ImageRotater");
+
+                return;
+            }
+
+            RunBulkConversion(
+                "Convert every GIF in your ImageRotater library to MP4?\n\n"
+                + "MP4 is much smaller and plays through hardware rather than decoding "
+                + "every frame on the UI thread. Each GIF is removed only once its MP4 "
+                + "exists.",
+                () => BulkConverter.GifsToMp4(_store));
+        }
+
+        // Remuxes every fragmented video the plugin holds.
+        public void RepairAllVideos()
+        {
+            if (!GifConverter.IsAvailable)
+            {
+                PlayniteApi.Dialogs.ShowErrorMessage(
+                    "This needs ffmpeg. Set its path on the Setup tab first.", "ImageRotater");
+
+                return;
+            }
+
+            RunBulkConversion(
+                "Check every video in your ImageRotater library and repair the broken "
+                + "ones?\n\n"
+                + "Videos downloaded in a fragmented format show as solid black tiles "
+                + "even though nothing reports an error. The repair rewrites only the "
+                + "container - a stream copy, so no quality is lost and healthy videos "
+                + "are left untouched.",
+                () => BulkConverter.RepairVideos(_store));
+        }
+
+        // Converts every JPEG the plugin holds to PNG.
+        public void ConvertJpegsToPng()
+        {
+            RunBulkConversion(
+                "Convert every JPEG in your ImageRotater library to PNG?\n\n"
+                + "PNG is lossless, so no further quality is lost each time an image is "
+                + "processed - but the files get considerably larger. Quality already "
+                + "lost to JPEG cannot be recovered. Each JPEG is removed only once its "
+                + "PNG exists.",
+                () => BulkConverter.JpegsToPng(_store));
+        }
+
+        private void RunBulkConversion(string question, Func<BulkConverter.Result> convert)
+        {
+            if (PlayniteApi.Dialogs.ShowMessage(
+                    question,
+                    "ImageRotater",
+                    System.Windows.MessageBoxButton.YesNo)
+                != System.Windows.MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            BulkConverter.Result result = null;
+
+            // Through Playnite's progress dialog: a large library is minutes of
+            // ffmpeg, and a frozen settings window looks like a hang.
+            PlayniteApi.Dialogs.ActivateGlobalProgress(
+                args =>
+                {
+                    args.ProgressMaxValue = 0;
+                    result = convert();
+                },
+                new GlobalProgressOptions("Converting artwork...", false));
+
+            if (result == null)
+            {
+                return;
+            }
+
+            // The published copies are regenerated from the candidates, and
+            // those candidates have just changed extension - so anything cached
+            // from before now points at a file that is gone.
+            _rotationService?.ForgetAll();
+
+            PlayniteApi.Dialogs.ShowMessage(result.Summary, "ImageRotater");
+        }
+
+        // Mends games left pointing at plugin artwork that no longer exists.
+        //
+        // Playnite renders a dead artwork reference as SOLID BLACK rather than
+        // as a blank tile, so a library in this state looks like the theme
+        // broke. Clearing the reference lets Playnite fall back to its own
+        // placeholder, and the game's library plugin can then re-fetch its
+        // proper artwork.
+        //
+        // Separate from the reset, and safe: it deletes nothing and only
+        // touches games whose current artwork is already unreachable.
+        public bool RepairArtworkReferences()
+        {
+            int cleared;
+            int orphans;
+            int videos = 0;
+
+            try
+            {
+                cleared = _writer.ClearDeadReferences();
+
+                // Published copies for games whose artwork is gone. These
+                // outlive their source, and a theme binding the leftover
+                // 1x1 placeholder renders it as a black thumbnail.
+                orphans = _store.RemoveOrphanedPublished();
+
+                // Videos downloaded as DASH fragments. Windows renders those as
+                // solid black while reporting them as playing, so they need
+                // rewriting into a normal container.
+                videos = BulkConverter.RepairVideos(_store).Converted;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "ImageRotater: could not repair artwork references");
+
+                PlayniteApi.Dialogs.ShowErrorMessage(
+                    "Could not repair the artwork references. " + ex.Message, "ImageRotater");
+
+                return false;
+            }
+
+            if (cleared == 0 && orphans == 0 && videos == 0)
+            {
+                PlayniteApi.Dialogs.ShowMessage(
+                    "Nothing needed repairing - every game points at artwork that exists.",
+                    "ImageRotater");
+
+                return false;
+            }
+
+            _rotationService?.ForgetAll();
+
+            PlayniteApi.Dialogs.ShowMessage(
+                $"Cleared {cleared} broken artwork reference(s).\n\n"
+                + "Those games now show Playnite's own placeholder instead of a black "
+                + "tile. Use your library plugin's \"Download metadata\" to fetch their "
+                + "artwork again.\n\n"
+                + "Playnite will offer to restart when you save these settings.",
+                "ImageRotater");
+
+            return true;
+        }
+
+        // Called by the settings view model after every save.
+        //
+        // Clearing the rotation memory makes toggled settings take effect on
+        // the NEXT selection instead of whenever each game happens to rotate
+        // again. Concretely: turning letterboxing off used to leave every
+        // game on its composite until its pick eventually changed, because
+        // the write-skip saw the same final path and did nothing - which read
+        // as the toggle being broken.
+        public void NotifySettingsSaved()
+        {
+            _rotationService?.ForgetAll();
+        }
+
+        // Removes every image the plugin holds and puts each game's own artwork
+        // back. Asks first, and asks for a restart afterwards.
+        //
+        // The restart matters. Every control in the running session holds
+        // decoded images, the rotation service holds picks, and the session
+        // cache holds paths - all of which now point at deleted files.
+        // Rebuilding that state in place would mean invalidating half a dozen
+        // caches in the right order; a restart rebuilds all of it correctly.
+        //
+        // The restart itself is Playnite's own: its settings window carries an
+        // IsRestartRequired flag which, once set, makes Playnite offer the
+        // restart when settings are saved. Not in the SDK, so it is reached by
+        // reflection - the same route UniPlaySong uses. Doing it Playnite's way
+        // rather than relaunching the process ourselves keeps its shutdown, and
+        // its database flush, intact.
+        //
+        // Returns true when the reset actually ran, so the caller knows whether
+        // to raise that flag.
+        public bool ResetLibrary()
+        {
+            const string Warning =
+                "This removes EVERY image and video ImageRotater holds for your whole "
+                + "library, and puts each game back to its own artwork.\n\n"
+                + "Downloaded artwork is deleted from disk and cannot be recovered.\n\n"
+                + "You should restart Playnite afterwards.\n\n"
+                + "Continue?";
+
+            if (PlayniteApi.Dialogs.ShowMessage(
+                    Warning,
+                    "ImageRotater - reset library",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning)
+                != System.Windows.MessageBoxResult.Yes)
+            {
+                return false;
+            }
+
+            LibraryReset.Result result;
+
+            try
+            {
+                result = new LibraryReset(_writer, _store).Run();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "ImageRotater: library reset failed");
+
+                PlayniteApi.Dialogs.ShowErrorMessage(
+                    "The reset did not finish. " + ex.Message, "ImageRotater");
+
+                return false;
+            }
+
+            if (!result.Success)
+            {
+                // Restore failed, so nothing was deleted and the session is
+                // still consistent. No restart needed.
+                PlayniteApi.Dialogs.ShowErrorMessage(result.Error, "ImageRotater");
+                return false;
+            }
+
+            string summary =
+                $"Restored {result.GamesRestored} game(s) and cleared "
+                + $"{result.FoldersDeleted} folder(s).";
+
+            if (result.FoldersFailed > 0)
+            {
+                summary += $"\n\n{result.FoldersFailed} folder(s) could not be deleted, "
+                    + "usually because a file was still open. Running this again after "
+                    + "the restart will clear them.";
+            }
+
+            // Stops the rotation service handing out picks that point at files
+            // this method just deleted.
+            _rotationService?.ForgetAll();
+
+            PlayniteApi.Dialogs.ShowMessage(
+                summary + "\n\nPlaynite will offer to restart when you close settings.",
+                "ImageRotater");
+
+            return true;
         }
     }
 }

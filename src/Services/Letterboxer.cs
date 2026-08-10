@@ -27,7 +27,19 @@ namespace ImageRotater.Services
 
         // Matches ShapeBias: within this of the target, the image is already
         // screen-shaped and letterboxing it would add bars for no reason.
-        private const double Tolerance = 0.35;
+        // Tight, deliberately - this went from 0.35 to 0.10 after mixed-shape
+        // crossfades were caught on camera. At 0.35, anything from 4:3 to 2:1
+        // passed through raw while wider banners became top-pinned composites;
+        // fading a composite (mostly dark translucent fill) over a full-frame
+        // image let the underlying art punch through mid-window, which read as
+        // a crop glitch on every rotation between the two shapes.
+        //
+        // At 0.10 essentially every background becomes a screen-shaped
+        // composite, so a crossfade is always full-frame over full-frame: the
+        // geometry never changes, only the picture. The cost is a sliver of
+        // blurred fill on near-screen-shaped images, which the fill style
+        // makes hard to spot.
+        private const double Tolerance = 0.10;
 
         // How strongly the fill is pushed back so the real image reads as the
         // subject rather than blending into its own backdrop. Kept light: a
