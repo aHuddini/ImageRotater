@@ -1,23 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Windows;
 using Newtonsoft.Json;
 using Playnite.SDK;
 
 namespace ImageRotater
 {
-    // How the chosen image reaches the screen.
-    public enum DisplayMode
-    {
-        // Write into Playnite's own Game.BackgroundImage. Works in every theme
-        // with no theme support, because every theme already renders that field.
-        UpdatePlayniteBackground,
-
-        // Render through the plugin's own control. Higher quality - decode
-        // sizing, caching - but only appears where a theme places
-        // <ContentControl x:Name="ImageRotater_Background" />.
-        ThemeElement
-    }
-
     // When a game has several images, this decides how the shown one is chosen.
     public enum SelectionMode
     {
@@ -31,7 +19,6 @@ namespace ImageRotater
         private bool enableRotation = true;     // Master switch for the whole feature
         private bool enableDebugLogging = false; // Verbose log to ImageRotater.log
         private SelectionMode selectionMode = SelectionMode.Session;
-        private DisplayMode displayMode = DisplayMode.UpdatePlayniteBackground;
         private bool rotateCovers = false;
 
         // Off by default: covers are box art the user has usually curated
@@ -90,6 +77,16 @@ namespace ImageRotater
         // there whenever a game has any.
         private bool letterboxBackgrounds = true;
 
+        // On by default: it only changes anything for a game whose backgrounds
+        // differ in resolution, and there it removes a visible glitch.
+        //
+        // Playnite blurs the window background with a fixed-radius effect
+        // applied after the image is scaled, and decodes every background to
+        // the screen width - so sources of different resolutions end up blurred
+        // by visibly different amounts. Levelling the width makes consecutive
+        // picks blur identically.
+        private bool normaliseBackgroundSize = true;
+
         private bool backgroundChangerCompatibility = true;
         private string steamGridDbApiKey = string.Empty;
 
@@ -102,10 +99,22 @@ namespace ImageRotater
         private string ffmpegPath = string.Empty;
         private string ytDlpPath = string.Empty;
 
-        public DisplayMode DisplayMode
+        // deno.exe - not used by this plugin directly, but by yt-dlp.
+        //
+        // YouTube gates stream URLs behind nsig and PO-token challenges that
+        // have to be solved by evaluating JavaScript. yt-dlp delegates that to
+        // an external JS runtime rather than carrying an interpreter, so
+        // without one it returns nothing for a YouTube search - quietly, with
+        // exit code 0 and no error to show the user.
+        //
+        // Its folder is prepended to the yt-dlp process PATH rather than
+        // passed as an argument, which is how yt-dlp expects to find it.
+        private string denoPath = string.Empty;
+
+        public bool NormaliseBackgroundSize
         {
-            get => displayMode;
-            set { displayMode = value; OnPropertyChanged(); }
+            get => normaliseBackgroundSize;
+            set { normaliseBackgroundSize = value; OnPropertyChanged(); }
         }
 
         // Also answer to the element names BackgroundChanger themes already use,
@@ -371,6 +380,12 @@ namespace ImageRotater
             set { ytDlpPath = value; OnPropertyChanged(); }
         }
 
+        public string DenoPath
+        {
+            get => denoPath;
+            set { denoPath = value ?? string.Empty; OnPropertyChanged(); }
+        }
+
         public bool EnableRotation
         {
             get => enableRotation;
@@ -399,7 +414,48 @@ namespace ImageRotater
         public ImageRotaterSettings Settings
         {
             get => settings;
-            set { settings = value; OnPropertyChanged(); }
+            set
+            {
+                // Watch the new object and stop watching the old one. Assigning
+                // Settings is how CancelEdit restores the snapshot, so without
+                // the swap the status line would keep reporting on a discarded
+                // object - and each cancel would leak another subscription.
+                if (settings != null)
+                {
+                    settings.PropertyChanged -= OnSettingChanged;
+                }
+
+                settings = value;
+
+                if (settings != null)
+                {
+                    settings.PropertyChanged += OnSettingChanged;
+                }
+
+                OnPropertyChanged();
+                UpdateApiKeyStatus();
+            }
+        }
+
+        private void OnSettingChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ImageRotaterSettings.SteamGridDbApiKey))
+            {
+                UpdateApiKeyStatus();
+                return;
+            }
+
+            // A path can be typed as well as browsed, and a typed one would
+            // otherwise keep the status from whatever was in the box when the
+            // page opened. Cheap to re-probe: ToolProbe caches by path and
+            // mtime, so this only shells out when the path actually resolves
+            // somewhere new.
+            if (e.PropertyName == nameof(ImageRotaterSettings.FfmpegPath)
+                || e.PropertyName == nameof(ImageRotaterSettings.YtDlpPath)
+                || e.PropertyName == nameof(ImageRotaterSettings.DenoPath))
+            {
+                UpdateToolStatus();
+            }
         }
 
         public ImageRotaterSettingsViewModel(ImageRotater plugin)
@@ -415,19 +471,136 @@ namespace ImageRotater
         // into TextBlocks and setting their text and colour by hand.
         private readonly Services.ToolProbe _probe = new Services.ToolProbe();
 
-        private string _ffmpegStatus = string.Empty;
-        private string _ytDlpStatus = string.Empty;
+        private SetupStatus _ffmpegStatus = SetupStatus.Neutral(string.Empty);
+        private SetupStatus _ytDlpStatus = SetupStatus.Neutral(string.Empty);
+        private SetupStatus _denoStatus = SetupStatus.Neutral(string.Empty);
+        private SetupStatus _apiKeyStatus = SetupStatus.Neutral(string.Empty);
 
-        public string FfmpegStatus
+        public SetupStatus FfmpegStatus
         {
             get => _ffmpegStatus;
             set { _ffmpegStatus = value; OnPropertyChanged(); }
         }
 
-        public string YtDlpStatus
+        public SetupStatus YtDlpStatus
         {
             get => _ytDlpStatus;
             set { _ytDlpStatus = value; OnPropertyChanged(); }
+        }
+
+        public SetupStatus DenoStatus
+        {
+            get => _denoStatus;
+            set { _denoStatus = value; OnPropertyChanged(); }
+        }
+
+        public SetupStatus ApiKeyStatus
+        {
+            get => _apiKeyStatus;
+            set { _apiKeyStatus = value; OnPropertyChanged(); }
+        }
+
+        // Reports on the key's SHAPE as it is typed. Whether the key actually
+        // works is the server's answer, and the search dialog already relays
+        // it - checking here would mean a network call on every keystroke.
+        private void UpdateApiKeyStatus()
+        {
+            string key = Settings?.SteamGridDbApiKey;
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                // No tick and no cross: absent is the default, not a failure.
+                ApiKeyStatus = SetupStatus.Neutral(
+                    "No key set. SteamGridDB search is unavailable; "
+                    + "the other sources still work.");
+                return;
+            }
+
+            string problem = Services.SettingsValidator.CheckApiKey(key);
+
+            ApiKeyStatus = problem != null
+                ? SetupStatus.Problem(problem)
+                : SetupStatus.Ok("Key looks right.");
+        }
+
+        // Clears every image the plugin holds and restores each game's own
+        // artwork. Destructive, so ResetLibrary confirms before doing anything.
+        //
+        // The command parameter is the button, which is how the restart prompt
+        // below finds the settings window.
+        public RelayCommand<object> ConvertGifs => new RelayCommand<object>(a =>
+        {
+            plugin?.ConvertGifsToMp4();
+        });
+
+        public RelayCommand<object> ConvertJpegs => new RelayCommand<object>(a =>
+        {
+            plugin?.ConvertJpegsToPng();
+        });
+
+        public RelayCommand<object> RepairVideos => new RelayCommand<object>(a =>
+        {
+            plugin?.RepairAllVideos();
+        });
+
+        // Clears references to plugin artwork that no longer exists, which
+        // Playnite otherwise renders as solid black tiles. Deletes nothing.
+        public RelayCommand<object> RepairArtwork => new RelayCommand<object>(a =>
+        {
+            if (plugin == null || !plugin.RepairArtworkReferences())
+            {
+                return;
+            }
+
+            RequestRestart(a as FrameworkElement);
+        });
+
+        public RelayCommand<object> ResetLibrary => new RelayCommand<object>(a =>
+        {
+            if (plugin == null || !plugin.ResetLibrary())
+            {
+                return;
+            }
+
+            RequestRestart(a as FrameworkElement);
+        });
+
+        // Asks Playnite to offer a restart when these settings are saved.
+        //
+        // Its settings window carries an IsRestartRequired flag that does
+        // exactly this. It is not on any SDK interface, so it is reached by
+        // reflection off the window's DataContext - the same route UniPlaySong
+        // uses. Going through Playnite rather than relaunching the process
+        // ourselves keeps its own shutdown, and its database flush, intact.
+        private static void RequestRestart(FrameworkElement source)
+        {
+            try
+            {
+                Window window = source == null ? null : Window.GetWindow(source);
+
+                object context = window?.DataContext;
+
+                if (context == null)
+                {
+                    return;
+                }
+
+                System.Reflection.PropertyInfo flag =
+                    context.GetType().GetProperty("IsRestartRequired");
+
+                if (flag != null && flag.CanWrite)
+                {
+                    flag.SetValue(context, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Playnite may rename or drop the property. The reset itself
+                // has already succeeded either way - the user just has to
+                // restart on their own.
+                LogManager.GetLogger().Warn(
+                    ex, "ImageRotater: could not ask Playnite to restart");
+            }
         }
 
         public RelayCommand<object> BrowseFfmpeg => new RelayCommand<object>(a =>
@@ -438,6 +611,18 @@ namespace ImageRotater
             if (!string.IsNullOrWhiteSpace(path))
             {
                 Settings.FfmpegPath = path;
+                UpdateToolStatus();
+            }
+        });
+
+        public RelayCommand<object> BrowseDeno => new RelayCommand<object>(a =>
+        {
+            string path = plugin?.PlayniteApi?.Dialogs?.SelectFile(
+                "deno|deno.exe|Executable|*.exe");
+
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                Settings.DenoPath = path;
                 UpdateToolStatus();
             }
         });
@@ -479,8 +664,76 @@ namespace ImageRotater
             string ytDlp = Services.ExternalTool.Resolve(
                 Settings.YtDlpPath, Services.ExternalTool.YtDlpExe);
 
-            FfmpegStatus = _probe.Probe(ffmpeg, Services.ToolProbe.FfmpegVersionFlag);
-            YtDlpStatus = _probe.Probe(ytDlp, Services.ToolProbe.YtDlpVersionFlag);
+            FfmpegStatus = DescribeTool(
+                ffmpeg, Settings?.FfmpegPath, Services.ToolProbe.FfmpegVersionFlag, "ffmpeg");
+
+            YtDlpStatus = DescribeTool(
+                ytDlp, Settings?.YtDlpPath, Services.ToolProbe.YtDlpVersionFlag, "yt-dlp");
+
+            string deno = Services.ExternalTool.Resolve(
+                Settings?.DenoPath, Services.ExternalTool.DenoExe);
+
+            DenoStatus = DescribeDeno(deno, Settings?.DenoPath, ytDlp);
+        }
+
+        // deno gets its own wording because its absence only matters once
+        // yt-dlp is present: on its own it is a JS runtime the plugin never
+        // calls. Saying "not found" next to an unconfigured yt-dlp would be
+        // pointing at the second problem while the first is still open.
+        private SetupStatus DescribeDeno(string resolved, string configured, string ytDlp)
+        {
+            const string Flag = Services.ToolProbe.YtDlpVersionFlag;
+
+            if (_probe.Works(resolved, Flag))
+            {
+                bool onPath = string.IsNullOrWhiteSpace(configured);
+                string version = _probe.Probe(resolved, Flag);
+
+                return SetupStatus.Ok(onPath ? version + " (on your PATH)" : version);
+            }
+
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                return SetupStatus.Problem(
+                    _probe.Probe(resolved, Flag) + " - check this path points at deno.exe");
+            }
+
+            if (!_probe.Works(ytDlp, Services.ToolProbe.YtDlpVersionFlag))
+            {
+                return SetupStatus.Neutral("Only needed once yt-dlp is set up.");
+            }
+
+            return SetupStatus.Neutral(
+                "deno was not found. yt-dlp needs it to read YouTube, and without "
+                + "it a YouTube search returns nothing rather than reporting an error.");
+        }
+
+        // Turns a probe result into the line under the box.
+        //
+        // Three outcomes, not two. A tool that is simply absent gets no cross:
+        // both are optional, and a red mark against a user who never wanted
+        // YouTube import reads as something being broken. The cross is kept
+        // for a path that was SET and does not work, which is a real mistake.
+        private SetupStatus DescribeTool(
+            string resolved, string configured, string versionFlag, string name)
+        {
+            string result = _probe.Probe(resolved, versionFlag);
+
+            if (_probe.Works(resolved, versionFlag))
+            {
+                bool onPath = string.IsNullOrWhiteSpace(configured);
+
+                return SetupStatus.Ok(onPath ? result + " (on your PATH)" : result);
+            }
+
+            if (string.IsNullOrWhiteSpace(configured))
+            {
+                return SetupStatus.Neutral(
+                    $"{name} was not found on your PATH. Browse to it above, or "
+                    + "leave this blank and the features that need it stay off.");
+            }
+
+            return SetupStatus.Problem(result + " - check this path points at " + name + ".exe");
         }
 
         // Snapshot for cancel. Deep clone via JSON so every property is covered
@@ -509,13 +762,22 @@ namespace ImageRotater
             // a user who just pointed the plugin at ffmpeg would have to
             // restart Playnite before anything used it.
             Services.GifConverter.ConfiguredPath = Settings?.FfmpegPath;
+
+            // Toggled settings apply on the next selection, not whenever each
+            // game happens to rotate again.
+            plugin?.NotifySettingsSaved();
         }
 
+        // Playnite calls this on Save. Returning false keeps the window open
+        // and shows the errors, so this is the one place a bad value can
+        // actually be refused rather than merely reported.
+        //
+        // The rules live in SettingsValidator, which knows nothing about the
+        // UI and can be tested without one.
         public bool VerifySettings(out List<string> errors)
         {
-            // Nothing to validate: both remaining settings are checkboxes.
-            errors = new List<string>();
-            return true;
+            errors = Services.SettingsValidator.Validate(Settings);
+            return errors.Count == 0;
         }
     }
 }

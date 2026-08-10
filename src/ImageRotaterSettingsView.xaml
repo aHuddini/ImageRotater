@@ -9,7 +9,6 @@
 
     <UserControl.Resources>
         <controls:SelectionModeConverter x:Key="SelectionModeConverter"/>
-        <controls:DisplayModeConverter x:Key="DisplayModeConverter"/>
     </UserControl.Resources>
 
     <!-- Tabbed on user request: backgrounds and covers are configured for
@@ -35,8 +34,9 @@
                                Margin="0,0,0,16"/>
 
                     <TextBlock Text="SteamGridDB"
+                               FontSize="14"
                                FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
+                               Margin="0,0,0,8"/>
                     <TextBlock TextWrapping="Wrap"
                                FontSize="11"
                                Foreground="Gray"
@@ -50,6 +50,21 @@
                                Margin="0,0,0,2"/>
                     <TextBox Text="{Binding Settings.SteamGridDbApiKey, UpdateSourceTrigger=PropertyChanged}"
                              Margin="0,0,0,4"/>
+                    <!-- Same check Save blocks on, reported as you type: a
+                         truncated paste is easier to fix while you can still
+                         see where the key came from. -->
+                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
+                        <TextBlock Text="{Binding ApiKeyStatus.Glyph}"
+                                   Foreground="{Binding ApiKeyStatus.Brush}"
+                                   DockPanel.Dock="Left"
+                                   FontWeight="Bold"
+                                   Margin="0,0,5,0"
+                                   VerticalAlignment="Top"/>
+                        <TextBlock Text="{Binding ApiKeyStatus.Message}"
+                                   Foreground="{Binding ApiKeyStatus.Brush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"/>
+                    </DockPanel>
                     <TextBlock Text="Stored in Playnite's settings file as plain text. The key only grants read access to public artwork and can be regenerated on SteamGridDB at any time."
                                FontSize="11"
                                Foreground="Gray"
@@ -59,8 +74,9 @@
                     <Separator Margin="0,16"/>
 
                     <TextBlock Text="ffmpeg"
+                               FontSize="14"
                                FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
+                               Margin="0,0,0,8"/>
                     <TextBlock TextWrapping="Wrap"
                                FontSize="11"
                                Foreground="Gray"
@@ -80,24 +96,33 @@
                         <TextBox Text="{Binding Settings.FfmpegPath, UpdateSourceTrigger=PropertyChanged}"
                                  VerticalContentAlignment="Center"/>
                     </DockPanel>
-                    <TextBlock Text="{Binding FfmpegStatus}"
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,4"/>
+                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
+                        <TextBlock Text="{Binding FfmpegStatus.Glyph}"
+                                   Foreground="{Binding FfmpegStatus.Brush}"
+                                   DockPanel.Dock="Left"
+                                   FontWeight="Bold"
+                                   Margin="0,0,5,0"
+                                   VerticalAlignment="Top"/>
+                        <TextBlock Text="{Binding FfmpegStatus.Message}"
+                                   Foreground="{Binding FfmpegStatus.Brush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"/>
+                    </DockPanel>
 
                     <Separator Margin="0,16"/>
 
                     <TextBlock Text="yt-dlp"
+                               FontSize="14"
                                FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
+                               Margin="0,0,0,8"/>
                     <TextBlock TextWrapping="Wrap"
                                FontSize="11"
                                Foreground="Gray"
                                Margin="0,0,0,8">
                         Imports video from YouTube and similar sites as animated backgrounds and
-                        covers. Needs ffmpeg as well, which is what converts the download into
-                        the MP4 the plugin plays. Also not bundled, and for the same reason.
+                        covers. Needs ffmpeg as well, which converts the download into the MP4
+                        the plugin plays, and deno below to read YouTube at all. Also not
+                        bundled, and for the same reason.
                     </TextBlock>
 
                     <DockPanel Margin="0,0,0,4">
@@ -109,17 +134,168 @@
                         <TextBox Text="{Binding Settings.YtDlpPath, UpdateSourceTrigger=PropertyChanged}"
                                  VerticalContentAlignment="Center"/>
                     </DockPanel>
-                    <TextBlock Text="{Binding YtDlpStatus}"
+                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
+                        <TextBlock Text="{Binding YtDlpStatus.Glyph}"
+                                   Foreground="{Binding YtDlpStatus.Brush}"
+                                   DockPanel.Dock="Left"
+                                   FontWeight="Bold"
+                                   Margin="0,0,5,0"
+                                   VerticalAlignment="Top"/>
+                        <TextBlock Text="{Binding YtDlpStatus.Message}"
+                                   Foreground="{Binding YtDlpStatus.Brush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"/>
+                    </DockPanel>
+
+                    <Separator Margin="0,16"/>
+
+                    <TextBlock Text="deno"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock TextWrapping="Wrap"
                                FontSize="11"
                                Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,4"/>
+                               Margin="0,0,0,8">
+                        yt-dlp's JavaScript runtime. YouTube hides its video streams behind
+                        challenges that have to be solved by running JavaScript, and yt-dlp
+                        hands that job to deno rather than carrying an interpreter of its own.
+                        Without it a YouTube search returns nothing at all, with no error to
+                        explain why. Get it from deno.com, or put deno.exe next to yt-dlp.exe
+                        and both are found together.
+                    </TextBlock>
+
+                    <DockPanel Margin="0,0,0,4">
+                        <Button Content="Browse..."
+                                DockPanel.Dock="Right"
+                                MinWidth="80"
+                                Margin="6,0,0,0"
+                                Command="{Binding BrowseDeno}"/>
+                        <TextBox Text="{Binding Settings.DenoPath, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalContentAlignment="Center"/>
+                    </DockPanel>
+                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
+                        <TextBlock Text="{Binding DenoStatus.Glyph}"
+                                   Foreground="{Binding DenoStatus.Brush}"
+                                   DockPanel.Dock="Left"
+                                   FontWeight="Bold"
+                                   Margin="0,0,5,0"
+                                   VerticalAlignment="Top"/>
+                        <TextBlock Text="{Binding DenoStatus.Message}"
+                                   Foreground="{Binding DenoStatus.Brush}"
+                                   FontSize="11"
+                                   TextWrapping="Wrap"/>
+                    </DockPanel>
 
                     <TextBlock Text="Leave a path blank and the plugin looks on your PATH. Set one explicitly if you keep the tool somewhere else."
                                FontSize="11"
                                Foreground="Gray"
                                TextWrapping="Wrap"
                                Margin="0,8,0,4"/>
+
+                    <Separator Margin="0,16"/>
+
+                    <TextBlock Text="Convert existing artwork"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock TextWrapping="Wrap"
+                               FontSize="11"
+                               Foreground="Gray"
+                               Margin="0,0,0,8">
+                        Applies to artwork ImageRotater already holds. Each original is removed
+                        only once its replacement exists, so an interrupted run leaves your
+                        library exactly as it was.
+                    </TextBlock>
+
+                    <Button Content="Convert all GIFs to MP4"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"
+                            Margin="0,0,0,4"
+                            Command="{Binding ConvertGifs}"/>
+                    <TextBlock Text="Much smaller, and played by hardware rather than decoded frame by frame on the UI thread. Needs ffmpeg."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10"/>
+
+                    <Button Content="Convert all JPEGs to PNG"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"
+                            Margin="0,0,0,4"
+                            Command="{Binding ConvertJpegs}"/>
+                    <TextBlock Text="Lossless, so no further quality is lost each time an image is processed - but the files get considerably larger. Quality already lost to JPEG does not come back."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10"/>
+
+                    <Button Content="Repair videos (fix black tiles)"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"
+                            Margin="0,0,0,4"
+                            Command="{Binding RepairVideos}"/>
+                    <TextBlock Text="Videos downloaded in a fragmented format show as solid black even though nothing reports an error. This rewrites just the container - no quality loss, healthy videos untouched. Also available per game from the right-click menu. Needs ffmpeg."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,4"/>
+
+                    <Separator Margin="0,16"/>
+
+                    <!-- Bordered and last, so it is not something you reach by
+                         accident on the way to a path box. -->
+                    <Border BorderBrush="#E03A3A"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12"
+                            Margin="0,8,0,4">
+                        <StackPanel>
+                            <TextBlock Text="Reset library"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="#E03A3A"
+                                       Margin="0,0,0,8"/>
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="Gray"
+                                       Margin="0,0,0,8">
+                                Deletes every image and video ImageRotater holds for your whole
+                                library, and puts each game back to its own artwork. Your games
+                                keep the covers and backgrounds they had before the plugin
+                                touched them; anything downloaded through it is gone for good.
+                                You will be asked to confirm, and Playnite will offer to restart
+                                afterwards.
+                            </TextBlock>
+                            <Button Content="Delete all plugin artwork and restore originals"
+                                    HorizontalAlignment="Left"
+                                    Padding="12,6"
+                                    Command="{Binding ResetLibrary}"
+                                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"/>
+
+                            <Separator Margin="0,12"/>
+
+                            <TextBlock Text="Repair artwork references"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="Gray"
+                                       Margin="0,0,0,8">
+                                If some games show solid black covers or backgrounds, they are
+                                pointing at plugin artwork that no longer exists - Playnite draws
+                                a missing image as black rather than as an empty tile. This clears
+                                those references so Playnite shows its own placeholder instead,
+                                and your library plugin can fetch the artwork again. Deletes
+                                nothing.
+                            </TextBlock>
+                            <Button Content="Repair artwork references"
+                                    HorizontalAlignment="Left"
+                                    Padding="12,6"
+                                    Command="{Binding RepairArtwork}"
+                                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"/>
+                        </StackPanel>
+                    </Border>
 
                 </StackPanel>
             </ScrollViewer>
@@ -176,34 +352,28 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="20">
 
-                    <TextBlock Text="How backgrounds are displayed"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-
-                    <RadioButton Content="Update Playnite's own background (works in every theme)"
-                                 GroupName="DisplayMode"
-                                 IsChecked="{Binding Settings.DisplayMode, Converter={StaticResource DisplayModeConverter}, ConverterParameter=UpdatePlayniteBackground}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="Sets each game's background in Playnite itself, so any theme shows it with no theme support needed. Changes your library data - use 'Restore original Playnite backgrounds' in the main menu to undo."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,8"/>
-
-                    <RadioButton Content="Use ImageRotater's own display control"
-                                 GroupName="DisplayMode"
-                                 IsChecked="{Binding Settings.DisplayMode, Converter={StaticResource DisplayModeConverter}, ConverterParameter=ThemeElement}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="Higher quality - images are decoded at display size and cached. Only appears in themes that place the ImageRotater (or BackgroundChanger) background element; in themes that don't, this adds nothing and Playnite's own background is still updated so rotation keeps working."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,8"/>
+                    <!-- No display-mode choice any more, deliberately. Playnite's
+                         own background is always updated - that is what makes
+                         rotation work in every theme - and a theme hosting the
+                         ImageRotater element simply gets the richer rendering
+                         on top. Both at once was already the only behaviour
+                         that made sense, and the old radio buttons just made
+                         users pick between two things they were getting
+                         anyway. -->
 
                     <CheckBox Content="Letterbox odd-shaped backgrounds"
                               IsChecked="{Binding Settings.LetterboxBackgrounds}"
                               Margin="0,8,0,4"/>
                     <TextBlock Text="When a game only has odd-shaped backgrounds (ultrawide banners, squares), they are pinned to the top of a screen-shaped canvas and fade into a blurred fill of themselves. The original files are never modified."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="20,0,0,4"/>
+
+                    <CheckBox Content="Level background sizes"
+                              IsChecked="{Binding Settings.NormaliseBackgroundSize}"
+                              Margin="0,8,0,4"/>
+                    <TextBlock Text="Publishes every background for a game at one width. Playnite blurs the window background by a fixed amount applied after the image is scaled, so backgrounds of different resolutions get visibly different blur - and switching between them makes the blur jump. Levelling the width removes that. The original files are never modified."
                                FontSize="11"
                                Foreground="Gray"
                                TextWrapping="Wrap"
