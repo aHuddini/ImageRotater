@@ -95,7 +95,6 @@ namespace ImageRotater.Services
             Log($"ImagesRoot       = {settings.ImagesRoot}");
             Log($"RotateCovers     = {settings.RotateCovers}");
             Log($"EnableCoverImage = {settings.EnableCoverImage}");
-            Log($"DisplayMode      = {settings.DisplayMode}");
             Log($"Theme binds: {{ImagesRoot}}\\{{game id}}\\covers{GameImageStore.PublishedFolderSuffix}\\{GameImageStore.PublishedFileName}");
             Log($"Log file: {_path}");
         }
