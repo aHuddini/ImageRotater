@@ -57,12 +57,24 @@
 
              LoadedBehavior=Manual so Play/Stop can be driven from code-behind -
              the default starts on load and ignores those calls. Always muted:
-             a library that made noise while you scrolled it would be a bug. -->
+             a library that made noise while you scrolled it would be a bug.
+
+             UnloadedBehavior=Manual is load-bearing in a Fullscreen grid, and
+             the default (Close) is what broke selection: selecting a tile runs
+             Focus() then BringIntoView(), which re-measures the tile panel and
+             REMOVES AND RE-INSERTS containers. That is an Unload/Load cycle on
+             this element, so the media was torn down the instant a tile became
+             selected - the video vanished and a still showed through, while
+             the code-behind logged a perfectly correct Play() on the right
+             file. Manual keeps the media alive across the cycle; the Loaded
+             handler restarts playback afterwards. Same shape BackgroundChanger
+             uses to survive the same recycle. -->
         <MediaElement x:Name="DisplayVideo"
                       Visibility="Collapsed"
                       Stretch="UniformToFill"
                       LoadedBehavior="Manual"
-                      UnloadedBehavior="Stop"
+                      UnloadedBehavior="Manual"
+                      Loaded="DisplayVideo_Loaded"
                       IsMuted="True"
                       ScrubbingEnabled="False"
                       MediaOpened="DisplayVideo_MediaOpened"

@@ -93,7 +93,29 @@ namespace ImageRotater.Controls
             // keep an animation decoding frames forever.
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
-            StopVideo();
+
+            // Video is released LATER, and only if this really was a teardown.
+            //
+            // Selecting a tile unloads and immediately reloads it - the panel
+            // re-measures and re-inserts its containers - so releasing here
+            // killed the video of the tile the user had just selected. That is
+            // the whole bug. Scrolling a tile out of view unloads it and it
+            // does NOT come back, and that case still has to release the
+            // decoder: a grid of retained decoders is what exhausts a 32-bit
+            // process.
+            //
+            // Checked at Background priority, after layout has settled: by
+            // then a recycle has reloaded the control and IsLoaded is true
+            // again, while a genuine teardown is still unloaded.
+            Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    if (!IsLoaded)
+                    {
+                        StopVideo();
+                    }
+                }),
+                System.Windows.Threading.DispatcherPriority.Background);
         }
 
         // Playnite calls this when the tile is bound to a different game -
@@ -227,11 +249,7 @@ namespace ImageRotater.Controls
             // it and would keep decoding frames forever.
             //
             // UNLESS unfocused tiles are allowed to animate - then a tile that
-            // lost selection has nothing to stop, and this branch firing anyway
-            // was a real bug: every animating unfocused tile ran a full Refresh
-            // with its previous-pick memory wiped on EVERY selection move,
-            // which in EverySelection mode re-rolled its artwork. The user saw
-            // every tile EXCEPT the selected one rotating as they scrolled.
+            // lost selection has nothing to stop.
             bool mine = GameContext != null && GameContext.Id == gameId;
 
             ImageRotaterSettings settings = _settings != null ? _settings() : null;
@@ -244,9 +262,23 @@ namespace ImageRotater.Controls
                 return;
             }
 
-            // The pick just changed underneath us, so the avoid-previous memory
-            // would otherwise veto the file the rotation actually chose.
-            _previousPick = null;
+            // Only a tile whose PICK actually changed forgets its history.
+            //
+            // Clearing this unconditionally was a regression: every wake -
+            // including the selection announcement, which fires on every move -
+            // wiped the avoid-previous memory, so in EverySelection mode tiles
+            // re-rolled their artwork constantly. Tiles that were merely told
+            // to re-read now keep their memory, and only the tile the rotation
+            // actually re-picked for starts fresh.
+            //
+            // "mine" is the test because the announcement names the game whose
+            // artwork moved on; a stand-down tile is being told to stop, not
+            // that its pick changed.
+            if (mine)
+            {
+                _previousPick = null;
+            }
+
             Refresh();
         }
 
@@ -574,11 +606,38 @@ namespace ImageRotater.Controls
             // not start a transition for a cover no longer on screen.
             int generation = _fadeGeneration;
 
+            // A backstop, because waiting on an event that may never arrive is
+            // how a tile gets stuck showing its OLD cover forever.
+            //
+            // IsDownloading is true for a bitmap still being fetched, but the
+            // completion events are not guaranteed to fire for every source -
+            // a cached or already-decoded local file can report downloading and
+            // then simply never raise either one. Before this, that left the
+            // outgoing layer opaque over the new cover with nothing to clear
+            // it: the tile looked like it had not rotated at all.
+            var backstop = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(600)
+            };
+
+            backstop.Tick += (s, e) =>
+            {
+                backstop.Stop();
+
+                if (generation == _fadeGeneration)
+                {
+                    CrossfadePreviousCover();
+                }
+            };
+
+            backstop.Start();
+
             System.EventHandler onReady = null;
             System.EventHandler<System.Windows.Media.ExceptionEventArgs> onFailed = null;
 
             onReady = (s, e) =>
             {
+                backstop.Stop();
                 bitmap.DownloadCompleted -= onReady;
                 bitmap.DownloadFailed -= onFailed;
 
@@ -592,6 +651,7 @@ namespace ImageRotater.Controls
             // frozen on screen forever.
             onFailed = (s, e) =>
             {
+                backstop.Stop();
                 bitmap.DownloadCompleted -= onReady;
                 bitmap.DownloadFailed -= onFailed;
 
@@ -698,12 +758,51 @@ namespace ImageRotater.Controls
             // full opacity the still-to-video switch was a hard cut through a
             // black rectangle: the one transition on this tile with no fade.
             DisplayVideo.BeginAnimation(OpacityProperty, null);
-            DisplayVideo.Opacity = 0;
+
+            // Only a video arriving from NOTHING starts invisible.
+            //
+            // The fade-up is driven by MediaOpened, and WPF does not re-raise
+            // that when the same Source is assigned again - which is exactly
+            // what a refresh on the already-playing tile does. Starting at
+            // zero unconditionally therefore left the video playing at opacity
+            // 0 with the still showing through: hovering a tile made the
+            // animation "disappear" while nothing had stopped it.
+            bool alreadyShowing =
+                DisplayVideo.Source != null &&
+                DisplayVideo.Visibility == Visibility.Visible;
+
+            DisplayVideo.Opacity = alreadyShowing ? 1.0 : 0.0;
 
             DisplayVideo.Source = new Uri(path);
             DisplayVideo.Visibility = Visibility.Visible;
             DisplayVideo.Play();
             _animating = true;
+
+            // Backstop for the same reason the cover crossfade has one: if
+            // MediaOpened never arrives, nothing else would ever make this
+            // visible again.
+            if (!alreadyShowing)
+            {
+                var reveal = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(700)
+                };
+
+                reveal.Tick += (s, e) =>
+                {
+                    reveal.Stop();
+
+                    if (DisplayVideo.Source != null &&
+                        DisplayVideo.Visibility == Visibility.Visible &&
+                        DisplayVideo.Opacity < 1.0)
+                    {
+                        DisplayVideo.BeginAnimation(OpacityProperty, null);
+                        DisplayVideo.Opacity = 1.0;
+                    }
+                };
+
+                reveal.Start();
+            }
 
             // Start somewhere other than the beginning.
             //
@@ -718,11 +817,45 @@ namespace ImageRotater.Controls
         // Stop AND drop the source. Stop alone keeps the file open, and
         // rotation replaces these files underneath us. A recycled tile must
         // also not keep decoding the previous game's video.
+        // Restarts playback after the element is re-inserted into the tree.
+        //
+        // Selecting a Fullscreen tile calls Focus() then BringIntoView(),
+        // which re-measures the tile panel; the panel removes and re-inserts
+        // its containers, so this element is unloaded and loaded again. With
+        // UnloadedBehavior=Manual the media survives that, but playback does
+        // not resume on its own - and a Play() issued while the element was
+        // detached is silently swallowed, which is exactly why the video
+        // stopped the moment a tile became selected.
+        private void DisplayVideo_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (DisplayVideo.Source == null ||
+                DisplayVideo.Visibility != Visibility.Visible)
+            {
+                return;
+            }
+
+            try
+            {
+                DisplayVideo.Play();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not resume video after a reload");
+            }
+        }
+
         private void StopVideo()
         {
             if (DisplayVideo.Source == null && DisplayVideo.Visibility == Visibility.Collapsed)
             {
                 return;
+            }
+
+            if (_settings?.Invoke()?.EnableDebugLogging == true)
+            {
+                Logger.Debug(
+                    $"IR-cover StopVideo: game={GameContext?.Name} selected={IsSelectedTile} "
+                    + $"caller={new System.Diagnostics.StackTrace().GetFrame(1)?.GetMethod()?.Name}");
             }
 
             DisplayVideo.Stop();
@@ -822,6 +955,10 @@ namespace ImageRotater.Controls
         // the theme's own artwork rather than a black rectangle.
         private void DisplayVideo_MediaFailed(object sender, ExceptionRoutedEventArgs e)
         {
+            Logger.Warn(
+                $"IR-cover MediaFailed: game={GameContext?.Name} "
+                + (e.ErrorException == null ? "no detail" : e.ErrorException.Message));
+
             string path = DisplayVideo.Source?.LocalPath;
 
             if (!string.IsNullOrEmpty(path) && _loggedFailures.Add(path))

@@ -303,7 +303,16 @@ namespace ImageRotater.Controls
             // whatever Playnite was still displaying - and the still-to-video
             // switch read as a hard cut through black.
             DisplayVideo.BeginAnimation(OpacityProperty, null);
-            DisplayVideo.Opacity = 0;
+
+            // Only a video arriving from NOTHING starts invisible - WPF does
+            // not re-raise MediaOpened for an unchanged Source, so a refresh on
+            // the already-playing background would otherwise leave it running
+            // at opacity 0.
+            bool alreadyShowing =
+                DisplayVideo.Source != null &&
+                DisplayVideo.Visibility == Visibility.Visible;
+
+            DisplayVideo.Opacity = alreadyShowing ? 1.0 : 0.0;
 
             DisplayVideo.Source = new Uri(path);
             DisplayVideo.Visibility = Visibility.Visible;
@@ -342,6 +351,33 @@ namespace ImageRotater.Controls
 
         // Stop AND drop the source. Stop alone leaves the file open, and the
         // rotation deletes and replaces these files underneath us.
+        // Restarts playback after the element is re-inserted into the tree.
+        //
+        // Selecting a Fullscreen tile calls Focus() then BringIntoView(),
+        // which re-measures the tile panel; the panel removes and re-inserts
+        // its containers, so this element is unloaded and loaded again. With
+        // UnloadedBehavior=Manual the media survives that, but playback does
+        // not resume on its own - and a Play() issued while the element was
+        // detached is silently swallowed, which is exactly why the video
+        // stopped the moment a tile became selected.
+        private void DisplayVideo_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (DisplayVideo.Source == null ||
+                DisplayVideo.Visibility != Visibility.Visible)
+            {
+                return;
+            }
+
+            try
+            {
+                DisplayVideo.Play();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: could not resume video after a reload");
+            }
+        }
+
         private void StopVideo()
         {
             if (DisplayVideo.Source == null && DisplayVideo.Visibility == Visibility.Collapsed)
