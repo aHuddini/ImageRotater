@@ -37,7 +37,12 @@ $version = $versionFull -replace '\.', '_'
 $extensionName = "ImageRotater"
 $extensionId = "72b7d457-0621-429b-8368-665bc53ff896"
 $outputDir = "src\bin\$Configuration\net4.6.2"
-$packageDir = "package"
+# Absolute, anchored to the project root rather than the caller's working
+# directory. As a bare relative path this resolved against wherever the shell
+# happened to be, so packaging from anywhere but the project root wrote the
+# staging folder somewhere else and then failed to validate a manifest it had
+# just written.
+$packageDir = Join-Path $projectRoot "package"
 
 # Writes UTF-8 with NO byte-order mark. Windows PowerShell 5.1's `-Encoding utf8`
 # always emits a BOM (utf8NoBOM only exists in PowerShell 6+), and a leading BOM
