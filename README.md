@@ -3,20 +3,31 @@
 A Playnite extension that rotates game background and cover artwork. Give a game
 several images and it shows a different one as you browse.
 
-> **⚠️ Work in progress — pre-1.0, initial release ongoing.** Usable and tested
-> (257 tests), but settings, published file names and the theme integration
-> surface can still change between versions. Back up your library first if your
-> artwork matters.
+Requires **Playnite 10.57 or newer**.
+
+## How it works — two tiers
+
+**Still images need nothing from a theme.** The plugin writes the chosen image
+to `Game.CoverImage` / `Game.BackgroundImage`, and Playnite draws it through its
+own artwork elements — Desktop and Fullscreen alike. Every theme, out of the
+box. (Fullscreen covers depend on a one-line Playnite fix that
+[shipped in 10.57](docs/THEME_INTEGRATION.md#the-fullscreen-grid-cover-problem-fixed-in-playnite-1057),
+submitted from this project.)
+
+**Video and GIF need one line from a theme.** Playnite's own artwork element is
+a WPF `Image`; it renders a bitmap and cannot play a file. The plugin ships a
+renderer that can — place `ImageRotater_Cover` / `ImageRotater_Background` in
+the template and motion artwork works there. Everything else in the plugin's
+controls exists to make a media pipeline behave inside a virtualised grid.
 
 ## Theme authors start here
 
 **[docs/THEME_INTEGRATION.md](docs/THEME_INTEGRATION.md)** — read before editing
 any theme file.
 
-Most themes need **no changes at all**. Background and cover rotation both work
-out of the box. The guide covers the settings themes can bind, the element
-names, what each attempted workaround actually cost, and two traps that
-black-screen Fullscreen if you hit them.
+Most themes need **no changes at all** for rotating stills. The guide covers the
+settings themes can bind, the element names, and two traps that black-screen
+Fullscreen if you hit them.
 
 Want animated covers and backgrounds? That is **two elements, both pure
 additions** — there is a

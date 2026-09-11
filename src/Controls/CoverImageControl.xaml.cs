@@ -9,7 +9,21 @@ using ImageRotater.Services;
 
 namespace ImageRotater.Controls
 {
-    // Carries a rotated cover to whatever wants to draw it.
+    // Renders MOTION covers - video and GIF - where a theme places it.
+    //
+    // Still covers never come through here. Rotation writes Game.CoverImage,
+    // Playnite notifies its own tile (Desktop always did; Fullscreen since
+    // 10.57), and Playnite's PART_ImageCover draws the new picture. No plugin
+    // control, no theme support, every theme, both modes.
+    //
+    // What Playnite's Image can never do is play a file: it renders a
+    // BitmapSource, full stop. So a game whose cover is an MP4 or an animated
+    // GIF needs a MediaElement, and only a plugin can supply one - which is
+    // this control, and the sole reason it exists. Everything in here that
+    // looks elaborate - surviving tile recycling, fading video up only once
+    // its first frame exists, animating the selected tile only - is the cost
+    // of a media pipeline inside a virtualised grid. None of it is about
+    // stills.
     //
     // This control decides WHICH cover a game shows and publishes it as a path
     // on its DataContext. It does not decode anything: the XAML binds that path
