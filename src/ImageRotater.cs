@@ -505,13 +505,27 @@ namespace ImageRotater
                         // Writing inside the fade is what both modes now need:
                         // the tile is told to re-read at the moment the fade
                         // hides the change.
-                        _gridRefresher.AnimatedSwap(
-                            game.Id,
-                            () =>
-                            {
-                                _rotationService.ApplyNext(game, ArtworkKind.Cover);
-                                CoverImageControl.NotifyArtworkRotated(game.Id);
-                            });
+                        //
+                        // Unless a theme hosts our control: it crossfades its
+                        // own picture, and sits opaque over PART_ImageCover -
+                        // fading the tile underneath would be invisible work,
+                        // and for a video pick would animate something nobody
+                        // can see. Then the swap just runs.
+                        if (CoverImageControl.IsHostedByTheme)
+                        {
+                            _rotationService.ApplyNext(game, ArtworkKind.Cover);
+                            CoverImageControl.NotifyArtworkRotated(game.Id);
+                        }
+                        else
+                        {
+                            _gridRefresher.AnimatedSwap(
+                                game.Id,
+                                () =>
+                                {
+                                    _rotationService.ApplyNext(game, ArtworkKind.Cover);
+                                    CoverImageControl.NotifyArtworkRotated(game.Id);
+                                });
+                        }
                     }
 
                     _coverDue = now.AddSeconds(Settings.CoverSlideshowSeconds);

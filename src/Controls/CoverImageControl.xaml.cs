@@ -149,6 +149,19 @@ namespace ImageRotater.Controls
         // appear to do nothing at all while the file underneath it changed.
         public static event Action<Guid> ArtworkRotated;
 
+        // Whether any theme is hosting this control right now.
+        //
+        // A control subscribes on Loaded and unsubscribes on Unloaded, so a
+        // live subscriber means a theme has placed ImageRotater_Cover and it
+        // will crossfade its own picture. The slideshow uses this to skip
+        // fading Playnite's PART_ImageCover underneath - that fade would run
+        // beneath an opaque control, invisible, and for a video pick would be
+        // animating a tile nobody can see.
+        public static bool IsHostedByTheme
+        {
+            get { return ArtworkRotated != null; }
+        }
+
         public static void NotifyArtworkRotated(Guid gameId)
         {
             Action<Guid> handler = ArtworkRotated;
@@ -314,11 +327,13 @@ namespace ImageRotater.Controls
                 // The pick the ROTATION made, when there is one for this game.
                 //
                 // Choosing again here meant two independent rolls for the same
-                // tile: the rotation writes Game.CoverImage and the grid
-                // refresher makes Playnite's own PART_ImageCover re-read it,
-                // while this control selected separately and drew on top. Two
-                // different covers for one game, updating at different moments -
-                // which is the image seen flipping back and forth.
+                // tile: the rotation writes Game.CoverImage, Playnite's own
+                // PART_ImageCover picks that up, and this control - drawing on
+                // top of it - had selected something else. Two different covers
+                // for one game, updating at different moments, which is the
+                // image seen flipping back and forth. One source of truth for
+                // the pick is the only fix, and it is not about how the tile
+                // underneath gets notified.
                 //
                 // The published value names the pick and the game it belongs
                 // to, set together by the publisher precisely so the two cannot
