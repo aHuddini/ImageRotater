@@ -59,6 +59,14 @@ namespace ImageRotater.Services
         private readonly Dictionary<ArtworkKind, Guid> _lastApplied =
             new Dictionary<ArtworkKind, Guid>();
 
+        // When that rotation happened, so the guard can tell Playnite's
+        // duplicate selection events (same instant) from the user genuinely
+        // navigating back to a game (seconds later).
+        private readonly Dictionary<ArtworkKind, DateTime> _lastAppliedAt =
+            new Dictionary<ArtworkKind, DateTime>();
+
+        private static readonly TimeSpan RepeatWindow = TimeSpan.FromMilliseconds(750);
+
         public BackgroundRotationService(
             IBackgroundImageSource source,
             IBackgroundImageSource coverSource,
@@ -175,17 +183,34 @@ namespace ImageRotater.Services
                 return;
             }
 
-            // Already rotated this kind for this game. Selection events repeat
-            // for the game already selected - Fullscreen re-raises them on
-            // view changes and focus shifts - and re-picking on those produced
-            // several different images per game per session.
+            // Suppress the REPEAT selection events Playnite raises for the game
+            // already selected - Fullscreen re-raises them on view changes and
+            // focus shifts, and re-picking on those produced several different
+            // images per game per second.
+            //
+            // Time-based, not identity-based, and that distinction is the whole
+            // bug it used to cause. Keyed on "last game rotated for this kind",
+            // navigating A -> B -> A found the key still holding A and returned
+            // early, so coming BACK to a game never re-picked its cover: the
+            // tile showed the same artwork forever in EverySelection mode.
+            // Backgrounds hid this because they rotate for the game being LEFT,
+            // which alternates the key naturally.
+            //
+            // A real navigation back to a game is seconds apart; the duplicate
+            // events Playnite fires arrive in the same instant. A short window
+            // separates them without ever blocking a genuine revisit.
             Guid last;
-            if (_lastApplied.TryGetValue(kind, out last) && last == game.Id)
+            DateTime when;
+
+            if (_lastApplied.TryGetValue(kind, out last) && last == game.Id &&
+                _lastAppliedAt.TryGetValue(kind, out when) &&
+                (DateTime.UtcNow - when) < RepeatWindow)
             {
                 return;
             }
 
             _lastApplied[kind] = game.Id;
+            _lastAppliedAt[kind] = DateTime.UtcNow;
 
             // Covers are ALWAYS written, even when a theme hosts the cover
             // control. The two are not alternatives: Game.CoverImage feeds
@@ -513,6 +538,7 @@ namespace ImageRotater.Services
             // leaving it on its restored artwork until the user selected
             // something else and came back.
             _lastApplied.Clear();
+            _lastAppliedAt.Clear();
         }
     }
 }
