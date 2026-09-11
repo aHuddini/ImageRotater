@@ -311,11 +311,9 @@ namespace ImageRotater
             //
             // COVERS rotate for the game ARRIVED AT - the user wants to watch
             // the tile change, not discover later that it did. A cover swap is
-            // not part of the switch transition, so it has no flash to cause;
-            // it just needs the tile told to re-read, which is what the grid
-            // refresher does. Playnite never notifies the property Fullscreen
-            // tiles bind, and themes cannot refresh an items view themselves -
-            // that takes a method call, and themes are XAML-only.
+            // not part of the switch transition, so it has no flash to cause,
+            // and the write alone updates the tile: Playnite notifies the
+            // property both Desktop and Fullscreen tiles bind.
             Game left = args?.OldValue?.FirstOrDefault();
             if (left != null)
             {
@@ -513,13 +511,7 @@ namespace ImageRotater
                             {
                                 _rotationService.ApplyNext(game, ArtworkKind.Cover);
                                 CoverImageControl.NotifyArtworkRotated(game.Id);
-                            },
-
-                            // The write itself notifies the tile on 10.57+, so
-                            // the fade only has to hide the swap - re-reading
-                            // the binding here would decode the same image a
-                            // second time.
-                            updateBinding: false);
+                            });
                     }
 
                     _coverDue = now.AddSeconds(Settings.CoverSlideshowSeconds);

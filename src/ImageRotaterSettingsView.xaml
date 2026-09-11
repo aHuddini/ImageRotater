@@ -458,16 +458,6 @@
                                TextWrapping="Wrap"
                                Margin="20,0,0,4"/>
 
-                    <CheckBox Content="Let themes render rotated covers"
-                              IsChecked="{Binding Settings.UseCoverControl}"
-                              IsEnabled="{Binding Settings.RotateCovers}"
-                              Margin="20,8,0,4"/>
-                    <TextBlock Text="Lets a theme draw rotated covers with its own element (ImageRotater_Cover). Safe to leave on: in themes that place none, covers keep rotating the normal way, and Fullscreen grid tiles are refreshed by the plugin itself."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="40,0,0,4"/>
-
                     <CheckBox Content="Play animated covers on every tile, not just the selected one"
                               IsChecked="{Binding Settings.AnimateUnfocusedCovers}"
                               IsEnabled="{Binding Settings.RotateCovers}"

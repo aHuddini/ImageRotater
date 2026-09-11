@@ -340,22 +340,6 @@ namespace ImageRotater.Controls
                         game.Id, candidates, _previousPick, settings.CoverSelectionMode);
                 }
 
-                // Diagnostics for the selected-tile-goes-still report: which
-                // branch this tile takes, with which path, is the whole
-                // question, and guessing at it has been wrong twice.
-                if (settings.EnableDebugLogging)
-                {
-                    bool fromRotation = string.Equals(
-                        settings.CurrentCoverGameId, game.Id.ToString(),
-                        StringComparison.OrdinalIgnoreCase);
-
-                    Logger.Debug(
-                        $"IR-cover \"{game.Name}\": selected={IsSelectedTile} "
-                        + $"fromRotation={fromRotation} "
-                        + $"motion={PosterFrame.IsMotion(path)} video={PosterFrame.IsVideo(path)} "
-                        + $"path={System.IO.Path.GetFileName(path ?? "(null)")}");
-                }
-
                 // Recorded before use, so a pick that turns out to be unusable
                 // still counts as tried and rotation moves past it.
                 _previousPick = path;
@@ -414,11 +398,6 @@ namespace ImageRotater.Controls
                 // mode of the Image.
                 if (PosterFrame.IsVideo(path))
                 {
-                    if (settings.EnableDebugLogging)
-                    {
-                        Logger.Debug($"IR-cover \"{game.Name}\": ShowVideo");
-                    }
-
                     ShowVideo(path);
                     return;
                 }
@@ -814,9 +793,6 @@ namespace ImageRotater.Controls
             _startAtRandomPoint = true;
         }
 
-        // Stop AND drop the source. Stop alone keeps the file open, and
-        // rotation replaces these files underneath us. A recycled tile must
-        // also not keep decoding the previous game's video.
         // Restarts playback after the element is re-inserted into the tree.
         //
         // Selecting a Fullscreen tile calls Focus() then BringIntoView(),
@@ -849,13 +825,6 @@ namespace ImageRotater.Controls
             if (DisplayVideo.Source == null && DisplayVideo.Visibility == Visibility.Collapsed)
             {
                 return;
-            }
-
-            if (_settings?.Invoke()?.EnableDebugLogging == true)
-            {
-                Logger.Debug(
-                    $"IR-cover StopVideo: game={GameContext?.Name} selected={IsSelectedTile} "
-                    + $"caller={new System.Diagnostics.StackTrace().GetFrame(1)?.GetMethod()?.Name}");
             }
 
             DisplayVideo.Stop();
@@ -956,7 +925,7 @@ namespace ImageRotater.Controls
         private void DisplayVideo_MediaFailed(object sender, ExceptionRoutedEventArgs e)
         {
             Logger.Warn(
-                $"IR-cover MediaFailed: game={GameContext?.Name} "
+                $"ImageRotater: cover video failed for {GameContext?.Name} - "
                 + (e.ErrorException == null ? "no detail" : e.ErrorException.Message));
 
             string path = DisplayVideo.Source?.LocalPath;

@@ -86,14 +86,13 @@ namespace ImageRotater.Tests.Services
                 _writer, null, _store, () => settings);
         }
 
-        private static ImageRotaterSettings Settings(bool rotateCovers, bool useCoverControl)
+        private static ImageRotaterSettings Settings(bool rotateCovers)
         {
             return new ImageRotaterSettings
             {
                 EnableRotation = true,
                 SelectionMode = SelectionMode.EverySelection,
-                RotateCovers = rotateCovers,
-                UseCoverControl = useCoverControl
+                RotateCovers = rotateCovers
             };
         }
 
@@ -105,26 +104,18 @@ namespace ImageRotater.Tests.Services
         // it. Standing the write down on the control's behalf froze covers
         // everywhere the control does not reach.
         [Test]
-        public void CoverControlEnabled_WriteStillHappens()
+        public void CoversAreWrittenWhenRotating()
         {
-            Build(Settings(rotateCovers: true, useCoverControl: true)).ApplyTo(_game);
+            Build(Settings(rotateCovers: true)).ApplyTo(_game);
 
             CollectionAssert.Contains(_writer.Kinds, ArtworkKind.Cover,
                 "the control reaches only one grid template; every other view needs the write");
         }
 
         [Test]
-        public void CoverControlDisabled_WriteStillHappens()
-        {
-            Build(Settings(rotateCovers: true, useCoverControl: false)).ApplyTo(_game);
-
-            CollectionAssert.Contains(_writer.Kinds, ArtworkKind.Cover);
-        }
-
-        [Test]
         public void BackgroundsAreAlwaysWritten()
         {
-            Build(Settings(rotateCovers: true, useCoverControl: true)).ApplyTo(_game);
+            Build(Settings(rotateCovers: true)).ApplyTo(_game);
 
             CollectionAssert.Contains(_writer.Kinds, ArtworkKind.Background,
                 "the cover control must not disable background rotation");
@@ -143,7 +134,7 @@ namespace ImageRotater.Tests.Services
             File.WriteAllBytes(extra, new byte[] { 5, 6, 7, 8 });
             _store.AddImage(_game.Id, extra, ArtworkKind.Background);
 
-            var settings = Settings(rotateCovers: false, useCoverControl: false);
+            var settings = Settings(rotateCovers: false);
             settings.SelectionMode = SelectionMode.Session;
 
             var service = Build(settings);
@@ -163,7 +154,7 @@ namespace ImageRotater.Tests.Services
         [Test]
         public void RotateCoversOff_NeitherPathRuns()
         {
-            Build(Settings(rotateCovers: false, useCoverControl: true)).ApplyTo(_game);
+            Build(Settings(rotateCovers: false)).ApplyTo(_game);
 
             CollectionAssert.DoesNotContain(_writer.Kinds, ArtworkKind.Cover);
         }
@@ -174,7 +165,7 @@ namespace ImageRotater.Tests.Services
         [Test]
         public void ChoosingACover_PublishesItsPath()
         {
-            var settings = Settings(rotateCovers: true, useCoverControl: false);
+            var settings = Settings(rotateCovers: true);
             Build(settings).ApplyTo(_game);
 
             Assert.IsNotEmpty(settings.CurrentCoverPath ?? string.Empty,
@@ -187,7 +178,7 @@ namespace ImageRotater.Tests.Services
         [Test]
         public void UnchangedPick_StillPublishesThePath()
         {
-            var settings = Settings(rotateCovers: true, useCoverControl: false);
+            var settings = Settings(rotateCovers: true);
             settings.SelectionMode = SelectionMode.Session;
 
             var service = Build(settings);
@@ -208,7 +199,7 @@ namespace ImageRotater.Tests.Services
         [Test]
         public void PublishedPathAndGameId_AlwaysMatchTheSameGame()
         {
-            var settings = Settings(rotateCovers: true, useCoverControl: false);
+            var settings = Settings(rotateCovers: true);
             Build(settings).ApplyTo(_game);
 
             Assert.AreEqual(_game.Id.ToString(), settings.CurrentCoverGameId,
@@ -223,7 +214,7 @@ namespace ImageRotater.Tests.Services
         [Test]
         public void ThemeElementDisplayMode_StillRotatesBackgrounds()
         {
-            var settings = Settings(rotateCovers: true, useCoverControl: false);
+            var settings = Settings(rotateCovers: true);
 
             Build(settings).ApplyTo(_game);
 
@@ -232,17 +223,16 @@ namespace ImageRotater.Tests.Services
         }
 
         // EnableCoverImage is what themes bind to decide whether to collapse
-        // their own native cover element. It must be true only when we will
-        // actually render one in its place.
+        // their own native cover element. It follows RotateCovers alone: the
+        // separate "let themes render covers" toggle it used to also require
+        // existed only to work around Fullscreen tiles holding a stale cover,
+        // which Playnite 10.57 fixed.
         [Test]
-        public void EnableCoverImage_RequiresBothRotateCoversAndTheControl()
+        public void EnableCoverImage_FollowsRotateCovers()
         {
-            Assert.IsTrue(Settings(true, true).EnableCoverImage);
-            Assert.IsFalse(Settings(true, false).EnableCoverImage,
-                "control disabled - the theme must keep its own cover");
-            Assert.IsFalse(Settings(false, true).EnableCoverImage,
+            Assert.IsTrue(Settings(true).EnableCoverImage);
+            Assert.IsFalse(Settings(false).EnableCoverImage,
                 "covers not rotating - the theme must keep its own cover");
-            Assert.IsFalse(Settings(false, false).EnableCoverImage);
         }
 
         // Themes bind EnableCoverImage, so a change to either underlying
@@ -251,21 +241,14 @@ namespace ImageRotater.Tests.Services
         [Test]
         public void EnableCoverImage_NotifiesWhenItsInputsChange()
         {
-            foreach (string input in new[] { "RotateCovers", "UseCoverControl" })
+            foreach (string input in new[] { "RotateCovers" })
             {
-                var settings = Settings(rotateCovers: false, useCoverControl: false);
+                var settings = Settings(rotateCovers: false);
 
                 var raised = new List<string>();
                 settings.PropertyChanged += (s, e) => raised.Add(e.PropertyName);
 
-                if (input == "RotateCovers")
-                {
-                    settings.RotateCovers = true;
-                }
-                else
-                {
-                    settings.UseCoverControl = true;
-                }
+                settings.RotateCovers = true;
 
                 CollectionAssert.Contains(raised, "EnableCoverImage",
                     $"changing {input} must notify the derived EnableCoverImage");
@@ -277,7 +260,7 @@ namespace ImageRotater.Tests.Services
         [Test]
         public void HasDataCover_NotifiesOnChangeOnly()
         {
-            var settings = Settings(true, true);
+            var settings = Settings(true);
             settings.HasDataCover = false;
 
             var raised = new List<string>();

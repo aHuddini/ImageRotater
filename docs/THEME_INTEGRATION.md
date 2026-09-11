@@ -36,27 +36,31 @@ repeats them.
 
 ---
 
-## The Fullscreen grid cover problem
+## The Fullscreen grid cover problem (fixed in Playnite 10.57)
 
-**Status: Playnite bug. Still covers are worked around in-plugin. Animated ones
-can be made to work from a theme, but not stably. Theme authors need to do
-nothing in either case.**
+**Status: resolved upstream. ImageRotater 1.0.0 requires Playnite 10.57 or
+newer for Fullscreen cover rotation. Theme authors need to do nothing.**
 
-The working mechanism: on arrival at a game, the plugin rotates its cover,
-finds the game's tile in the grid (matched by item type, not control name),
-and calls `UpdateTarget()` on the `PART_ImageCover` binding — which re-runs
-the binding getter and resolves the current `Game.CoverImage`. Exactly the
-re-read the missing notification should have caused. Unrealised (virtualised)
-tiles need nothing: they bind fresh when scrolled back in. A whole-view
-`ICollectionView.Refresh()` (rebuilds every tile, restores selection) is kept
-as fallback.
-
-A theme cannot do any of this itself — refreshing an items view or updating a
-binding takes a method call, and Playnite themes are XAML-only.
+Kept here because it explains why older plugin versions carried a workaround,
+and why this one does not.
 
 Playnite's `GamesCollectionViewEntry` raises `PropertyChanged` for the Desktop
-cover properties when `Game.CoverImage` changes, but not for the property the
-Fullscreen grid binds:
+cover properties when `Game.CoverImage` changes. Up to 10.56 it did not raise
+it for `FullscreenListItemCoverObject` - the property the Fullscreen grid's
+`PART_ImageCover` binds (`Playnite.FullscreenApp/Controls/GameListItem.cs`) -
+so a Fullscreen tile showed whatever cover was current when it was built and
+never updated. Switching grid modes rebuilt the tiles and they picked up new
+covers, which looked like partial success but was just reconstruction.
+
+Earlier versions of this plugin worked around it by finding the game's tile in
+the grid and calling `UpdateTarget()` on its cover binding by hand - the
+re-read the missing notification should have caused. It worked, but was
+unreliable during transitions and had to be suppressed to avoid decoding the
+same image twice.
+
+The actual fix was one line, submitted as a PR and merged as upstream commit
+`c48f3562` ("Cover image data not reloading properly in Fullscreen mode"),
+shipped in Playnite 10.57:
 
 ```csharp
 // source/Playnite/GamesCollectionViewEntry.cs
@@ -65,25 +69,13 @@ if (propertyName == nameof(Game.CoverImage))
     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CoverImageObject)));
     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CoverImageObjectCached)));
     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(GridViewCoverObjectCached)));
+    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FullscreenListItemCoverObject)));  // added
 }
 ```
 
-The Fullscreen grid binds `FullscreenListItemCoverObject`
-(`source/Playnite.FullscreenApp/Controls/GameListItem.cs`). Searching that file
-for `nameof(FullscreenListItemCoverObject)` returns no matches — it is never
-notified from anywhere. The Desktop `GameListItem` is otherwise structurally
-identical; only the bound property and the notification differ, which is exactly
-why the same plugin code works in Desktop and not in Fullscreen.
-
-**Symptom:** a Fullscreen grid tile shows whatever cover was current when the
-tile was built, and never updates. Switching grid modes rebuilds the tiles and
-they pick up new covers — which looks like partial success, but is just
-reconstruction, not rotation.
-
-**The fix is one line upstream.** Full write-up, with the reproduction and the
-workarounds ruled out: [PLAYNITE_ISSUE_DRAFT.md](PLAYNITE_ISSUE_DRAFT.md).
-
-For *still* covers the plugin works around it, so a theme needs to do nothing.
+With that in place a Fullscreen tile updates from the database write alone,
+exactly like Desktop, and the workaround is gone. The original write-up with
+the reproduction is at [PLAYNITE_ISSUE_DRAFT.md](PLAYNITE_ISSUE_DRAFT.md).
 
 ## Animated covers: place the plugin's control
 

@@ -39,10 +39,6 @@ namespace ImageRotater
                 OnPropertyChanged(nameof(EnableCoverImage));
             }
         }
-        // On by default: it is the only way Fullscreen grid tiles can rotate,
-        // and it changes nothing in themes that do not place our element.
-        private bool useCoverControl = true;
-
         private bool hasDataCover = false;
 
         private string currentCoverPath = string.Empty;
@@ -131,37 +127,19 @@ namespace ImageRotater
             set { backgroundChangerCompatibility = value; OnPropertyChanged(); }
         }
 
-        // Renders covers through the plugin's own control instead of writing
-        // Game.CoverImage.
-        //
-        // Why this exists: Fullscreen grid tiles bind Playnite's native
-        // PART_ImageCover, which resolves the image once through a cache keyed
-        // on the image id and then holds it. Changing Game.CoverImage updates
-        // the Desktop grid and both details views, but a Fullscreen grid tile
-        // keeps its first cover until the tiles are rebuilt. There is no SDK
-        // call to invalidate that cache - IGameDatabaseAPI has nine methods and
-        // none of them refresh anything.
-        //
-        // Owning the Image.Source ourselves sidesteps the cache entirely. The
-        // cost is that it only renders where a theme places our element.
-        public bool UseCoverControl
-        {
-            get => useCoverControl;
-            set
-            {
-                useCoverControl = value;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(EnableCoverImage));
-            }
-        }
-
         // Read by themes as {PluginSettings Plugin=ImageRotater, Path=EnableCoverImage}
         // to decide whether to collapse their native cover element in favour of
         // ours. Named to match what BackgroundChanger themes already query, so
         // a theme author adds a branch rather than learning new vocabulary.
+        //
+        // Simply "are covers rotating". There used to be a separate toggle for
+        // whether a theme's element was allowed to render covers, justified by
+        // Fullscreen tiles holding a stale cover until rebuilt - Playnite 10.57
+        // notifies them properly, so hosting the element is now purely the
+        // theme's choice and needs no permission from a setting.
         public bool EnableCoverImage
         {
-            get => rotateCovers && useCoverControl;
+            get => rotateCovers;
         }
 
         // True when the CURRENTLY SELECTED game has plugin-owned covers.

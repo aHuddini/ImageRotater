@@ -84,7 +84,6 @@ namespace ImageRotater.Tests.Services
             {
                 EnableRotation = true,
                 RotateCovers = true,
-                UseCoverControl = true,
                 SelectionMode = SelectionMode.EverySelection,
                 CoverSelectionMode = SelectionMode.EverySelection
             };
