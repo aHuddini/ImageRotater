@@ -326,28 +326,18 @@ namespace ImageRotater
             {
                 _rotationService.ApplyTo(selected, ArtworkKind.Cover);
 
-                // Only for a game the plugin actually has covers for.
+                // Nothing to do here any more.
                 //
-                // RefreshSoon calls UpdateTarget() on Playnite's OWN
-                // PART_ImageCover binding, which re-resolves
-                // FullscreenListItemCoverObject through its decoded-bitmap
-                // cache. For a game we rotated, that re-read IS the feature -
-                // it is the only way the tile ever sees a new cover.
+                // This is where the Fullscreen grid refresh workaround lived:
+                // Playnite did not raise PropertyChanged for
+                // FullscreenListItemCoverObject when Game.CoverImage changed,
+                // so a tile kept the cover it first resolved and the plugin had
+                // to re-run the tile's own binding by hand.
                 //
-                // For a game the plugin has never touched it changes nothing
-                // and costs a native image reload, with the target property
-                // briefly between values - a black flash on a tile we had no
-                // business touching. Guarding on RotateCovers alone fired this
-                // on EVERY selection while browsing a library.
-                //
-                // HasDataCover is already computed for the selected game just
-                // above, so this is free.
-                if (Settings?.RotateCovers == true &&
-                    Settings?.HasDataCover == true &&
-                    PlayniteApi.ApplicationInfo.Mode == ApplicationMode.Fullscreen)
-                {
-                    _gridRefresher.RefreshSoon(selected.Id);
-                }
+                // Playnite 10.57 raises that notification itself (upstream
+                // commit c48f3562), so the write above is all a Fullscreen tile
+                // needs - exactly like Desktop. Re-reading on top of it would
+                // only decode the same image twice.
             }
 
             // Restart the slideshow clock for the new selection. Deliberately
@@ -503,50 +493,33 @@ namespace ImageRotater
                 {
                     if (_store.GetImagePaths(game.Id, ArtworkKind.Cover).Count > 1)
                     {
-                        bool fullscreen =
-                            PlayniteApi.ApplicationInfo.Mode == ApplicationMode.Fullscreen;
-
-                        if (fullscreen)
-                        {
-                            // Fullscreen's missing notification is a gift
-                            // here: the write can happen entirely BEFORE the
-                            // fade, on a background thread, because nothing
-                            // will snap the tile early. The fade window then
-                            // contains only the binding re-read - the file
-                            // copies and database write are already done. This
-                            // is what removed the visible hitch between
-                            // fade-out and fade-in.
-                            System.Threading.Tasks.Task.Run(() =>
+                        // One path for both modes.
+                        //
+                        // Fullscreen used to write BEFORE the fade, on a
+                        // background thread, on the reasoning that its missing
+                        // notification meant nothing could snap the tile early.
+                        // Once Playnite raises PropertyChanged for
+                        // FullscreenListItemCoverObject that reasoning inverts:
+                        // the write itself notifies the tile, so doing it first
+                        // made the cover change BEFORE the fade started - the
+                        // swap was visible and then the fade played over it.
+                        //
+                        // Writing inside the fade is what both modes now need:
+                        // the tile is told to re-read at the moment the fade
+                        // hides the change.
+                        _gridRefresher.AnimatedSwap(
+                            game.Id,
+                            () =>
                             {
-                                try
-                                {
-                                    _rotationService.ApplyNext(game, ArtworkKind.Cover);
-                                    CoverImageControl.NotifyArtworkRotated(game.Id);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Logger.Error(ex, "ImageRotater: slideshow rotation failed");
-                                }
-                            }).ContinueWith(
-                                _ => _gridRefresher.AnimatedSwap(
-                                    game.Id, () => { }, updateBinding: true),
-                                System.Threading.Tasks.TaskScheduler.Default);
-                        }
-                        else
-                        {
-                            // Desktop notifies the tile the instant the
-                            // database changes, so the write MUST stay inside
-                            // the fade - done earlier, the tile snaps before
-                            // any animation starts.
-                            _gridRefresher.AnimatedSwap(
-                                game.Id,
-                                () =>
-                                {
-                                    _rotationService.ApplyNext(game, ArtworkKind.Cover);
-                                    CoverImageControl.NotifyArtworkRotated(game.Id);
-                                },
-                                updateBinding: false);
-                        }
+                                _rotationService.ApplyNext(game, ArtworkKind.Cover);
+                                CoverImageControl.NotifyArtworkRotated(game.Id);
+                            },
+
+                            // The write itself notifies the tile on 10.57+, so
+                            // the fade only has to hide the swap - re-reading
+                            // the binding here would decode the same image a
+                            // second time.
+                            updateBinding: false);
                     }
 
                     _coverDue = now.AddSeconds(Settings.CoverSlideshowSeconds);
