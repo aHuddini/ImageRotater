@@ -5,587 +5,368 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:controls="clr-namespace:ImageRotater.Controls"
              mc:Ignorable="d"
-             d:DesignHeight="400" d:DesignWidth="600">
+             d:DesignHeight="560" d:DesignWidth="760">
 
     <UserControl.Resources>
-        <controls:EnumRadioConverter x:Key="EnumRadio"/>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Palette and control styles, shared in shape with UniPlaySong and
+                     SuperScroll. Every control below carries an explicit style from it,
+                     so the host theme's implicit styles cannot reach in. -->
+                <ResourceDictionary Source="pack://application:,,,/ImageRotater;component/Controls/Settings/SettingsResources.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <controls:EnumRadioConverter x:Key="EnumRadio"/>
+        </ResourceDictionary>
     </UserControl.Resources>
 
-    <!-- Tabbed on user request: backgrounds and covers are configured for
-         different reasons at different times, and one long page buried both. -->
-    <TabControl Margin="8">
+    <!-- One rail, one page per entry. Backgrounds and covers are configured for different
+         reasons at different times, and one long page buried both. -->
+    <TabControl Style="{StaticResource IrRail}">
 
-        <!-- First tab deliberately: everything here is a prerequisite for a
-             feature that is otherwise silently unavailable. A user who never
-             opens this page gets no downloads, no GIF conversion and no video
-             import, with nothing on screen explaining why. -->
+        <!-- ================================ SETUP ================================ -->
+        <!-- First deliberately: everything here is a prerequisite for a feature that is
+             otherwise silently unavailable. -->
         <TabItem Header="Setup">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="20">
+            <ScrollViewer Style="{StaticResource IrPage}">
+                <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
 
-                    <TextBlock Text="External tools and keys"
-                               FontSize="18"
-                               FontWeight="Bold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="Everything ImageRotater needs from elsewhere. Each one unlocks a specific feature and the plugin works without any of them - it just does less."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,16"/>
+                    <TextBlock Text="Setup" Style="{StaticResource IrPageTitle}"/>
+                    <TextBlock Style="{StaticResource IrPageSubtitle}"
+                               Text="Point ImageRotater at what it needs from elsewhere. Each item unlocks a feature; the plugin works without any of them, it just does less."/>
 
-                    <TextBlock Text="SteamGridDB"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock TextWrapping="Wrap"
-                               FontSize="11"
-                               Foreground="Gray"
-                               Margin="0,0,0,8">
-                        Curated game artwork. Get a free key from steamgriddb.com under
-                        Preferences &#8594; API, then paste it below. Without it, the search
-                        dialog can still use web image search.
-                    </TextBlock>
-
-                    <TextBlock Text="API key"
-                               Margin="0,0,0,2"/>
-                    <TextBox Text="{Binding Settings.SteamGridDbApiKey, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,0,4"/>
-                    <!-- Same check Save blocks on, reported as you type: a
-                         truncated paste is easier to fix while you can still
-                         see where the key came from. -->
-                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
-                        <TextBlock Text="{Binding ApiKeyStatus.Glyph}"
-                                   Foreground="{Binding ApiKeyStatus.Brush}"
-                                   DockPanel.Dock="Left"
-                                   FontWeight="Bold"
-                                   Margin="0,0,5,0"
-                                   VerticalAlignment="Top"/>
-                        <TextBlock Text="{Binding ApiKeyStatus.Message}"
-                                   Foreground="{Binding ApiKeyStatus.Brush}"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"/>
-                    </DockPanel>
-                    <TextBlock Text="Stored in Playnite's settings file as plain text. The key only grants read access to public artwork and can be regenerated on SteamGridDB at any time."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="ffmpeg"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock TextWrapping="Wrap"
-                               FontSize="11"
-                               Foreground="Gray"
-                               Margin="0,0,0,8">
-                        Converts animated GIFs to MP4 - markedly smaller, and played by hardware
-                        rather than decoded frame by frame on the UI thread. Not bundled:
-                        ffmpeg is GPL-licensed and this plugin is MIT, so shipping the binary
-                        would change the licence of the whole project.
-                    </TextBlock>
-
-                    <DockPanel Margin="0,0,0,4">
-                        <Button Content="Browse..."
-                                DockPanel.Dock="Right"
-                                MinWidth="80"
-                                Margin="6,0,0,0"
-                                Command="{Binding BrowseFfmpeg}"/>
-                        <TextBox Text="{Binding Settings.FfmpegPath, UpdateSourceTrigger=PropertyChanged}"
-                                 VerticalContentAlignment="Center"/>
-                    </DockPanel>
-                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
-                        <TextBlock Text="{Binding FfmpegStatus.Glyph}"
-                                   Foreground="{Binding FfmpegStatus.Brush}"
-                                   DockPanel.Dock="Left"
-                                   FontWeight="Bold"
-                                   Margin="0,0,5,0"
-                                   VerticalAlignment="Top"/>
-                        <TextBlock Text="{Binding FfmpegStatus.Message}"
-                                   Foreground="{Binding FfmpegStatus.Brush}"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"/>
-                    </DockPanel>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="yt-dlp"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock TextWrapping="Wrap"
-                               FontSize="11"
-                               Foreground="Gray"
-                               Margin="0,0,0,8">
-                        Imports video from YouTube and similar sites as animated backgrounds and
-                        covers. Needs ffmpeg as well, which converts the download into the MP4
-                        the plugin plays, and deno below to read YouTube at all. Also not
-                        bundled, and for the same reason.
-                    </TextBlock>
-
-                    <DockPanel Margin="0,0,0,4">
-                        <Button Content="Browse..."
-                                DockPanel.Dock="Right"
-                                MinWidth="80"
-                                Margin="6,0,0,0"
-                                Command="{Binding BrowseYtDlp}"/>
-                        <TextBox Text="{Binding Settings.YtDlpPath, UpdateSourceTrigger=PropertyChanged}"
-                                 VerticalContentAlignment="Center"/>
-                    </DockPanel>
-                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
-                        <TextBlock Text="{Binding YtDlpStatus.Glyph}"
-                                   Foreground="{Binding YtDlpStatus.Brush}"
-                                   DockPanel.Dock="Left"
-                                   FontWeight="Bold"
-                                   Margin="0,0,5,0"
-                                   VerticalAlignment="Top"/>
-                        <TextBlock Text="{Binding YtDlpStatus.Message}"
-                                   Foreground="{Binding YtDlpStatus.Brush}"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"/>
-                    </DockPanel>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="deno"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock TextWrapping="Wrap"
-                               FontSize="11"
-                               Foreground="Gray"
-                               Margin="0,0,0,8">
-                        yt-dlp's JavaScript runtime. YouTube hides its video streams behind
-                        challenges that have to be solved by running JavaScript, and yt-dlp
-                        hands that job to deno rather than carrying an interpreter of its own.
-                        Without it a YouTube search returns nothing at all, with no error to
-                        explain why. Get it from deno.com, or put deno.exe next to yt-dlp.exe
-                        and both are found together.
-                    </TextBlock>
-
-                    <DockPanel Margin="0,0,0,4">
-                        <Button Content="Browse..."
-                                DockPanel.Dock="Right"
-                                MinWidth="80"
-                                Margin="6,0,0,0"
-                                Command="{Binding BrowseDeno}"/>
-                        <TextBox Text="{Binding Settings.DenoPath, UpdateSourceTrigger=PropertyChanged}"
-                                 VerticalContentAlignment="Center"/>
-                    </DockPanel>
-                    <DockPanel Margin="0,2,0,4" LastChildFill="True">
-                        <TextBlock Text="{Binding DenoStatus.Glyph}"
-                                   Foreground="{Binding DenoStatus.Brush}"
-                                   DockPanel.Dock="Left"
-                                   FontWeight="Bold"
-                                   Margin="0,0,5,0"
-                                   VerticalAlignment="Top"/>
-                        <TextBlock Text="{Binding DenoStatus.Message}"
-                                   Foreground="{Binding DenoStatus.Brush}"
-                                   FontSize="11"
-                                   TextWrapping="Wrap"/>
-                    </DockPanel>
-
-                    <TextBlock Text="Leave a path blank and the plugin looks on your PATH. Set one explicitly if you keep the tool somewhere else."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,8,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="Convert existing artwork"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8"/>
-                    <TextBlock TextWrapping="Wrap"
-                               FontSize="11"
-                               Foreground="Gray"
-                               Margin="0,0,0,8">
-                        Applies to artwork ImageRotater already holds. Each original is removed
-                        only once its replacement exists, so an interrupted run leaves your
-                        library exactly as it was.
-                    </TextBlock>
-
-                    <Button Content="Convert all GIFs to MP4"
-                            HorizontalAlignment="Left"
-                            Padding="12,6"
-                            Margin="0,0,0,4"
-                            Command="{Binding ConvertGifs}"/>
-                    <TextBlock Text="Much smaller, and played by hardware rather than decoded frame by frame on the UI thread. Needs ffmpeg."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,10"/>
-
-                    <Button Content="Convert all JPEGs to PNG"
-                            HorizontalAlignment="Left"
-                            Padding="12,6"
-                            Margin="0,0,0,4"
-                            Command="{Binding ConvertJpegs}"/>
-                    <TextBlock Text="Lossless, so no further quality is lost each time an image is processed - but the files get considerably larger. Quality already lost to JPEG does not come back."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,10"/>
-
-                    <Button Content="Repair videos (fix black tiles)"
-                            HorizontalAlignment="Left"
-                            Padding="12,6"
-                            Margin="0,0,0,4"
-                            Command="{Binding RepairVideos}"/>
-                    <TextBlock Text="Videos downloaded in a fragmented format show as solid black even though nothing reports an error. This rewrites just the container - no quality loss, healthy videos untouched. Also available per game from the right-click menu. Needs ffmpeg."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <!-- Bordered and last, so it is not something you reach by
-                         accident on the way to a path box. -->
-                    <Border BorderBrush="#E03A3A"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="12"
-                            Margin="0,8,0,4">
+                    <Border Style="{StaticResource IrCard}">
                         <StackPanel>
-                            <TextBlock Text="Reset library"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       Foreground="#E03A3A"
-                                       Margin="0,0,0,8"/>
-                            <TextBlock TextWrapping="Wrap"
-                                       FontSize="11"
-                                       Foreground="Gray"
-                                       Margin="0,0,0,8">
-                                Deletes every image and video ImageRotater holds for your whole
-                                library, and puts each game back to its own artwork. Your games
-                                keep the covers and backgrounds they had before the plugin
-                                touched them; anything downloaded through it is gone for good.
-                                You will be asked to confirm, and Playnite will offer to restart
-                                afterwards.
+                            <TextBlock Text="SteamGridDB" Style="{StaticResource IrCardTitle}"/>
+                            <TextBlock Style="{StaticResource IrHintFlush}"
+                                       Text="Curated game artwork. Get a free key from steamgriddb.com under Preferences → API and paste it here. Without it, the search dialog still has Steam and web image search."/>
+                            <DockPanel Margin="0,2,0,6">
+                                <TextBlock Text="API key" Style="{StaticResource IrLabel}" Width="72"/>
+                                <TextBox Style="{StaticResource IrTextBox}"
+                                         Text="{Binding Settings.SteamGridDbApiKey, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                            <!-- Same check Save blocks on, reported as you type. -->
+                            <TextBlock Style="{StaticResource IrStatus}" Foreground="{Binding ApiKeyStatus.Brush}" Margin="72,0,0,4">
+                                <Run Text="{Binding ApiKeyStatus.Glyph, Mode=OneWay}"/> <Run Text="{Binding ApiKeyStatus.Message, Mode=OneWay}"/>
                             </TextBlock>
-                            <Button Content="Delete all plugin artwork and restore originals"
-                                    HorizontalAlignment="Left"
-                                    Padding="12,6"
-                                    Command="{Binding ResetLibrary}"
-                                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"/>
+                            <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,0,0,0"
+                                       Text="Stored in Playnite's settings file as plain text. The key only grants read access to public artwork and can be regenerated on SteamGridDB at any time."/>
+                        </StackPanel>
+                    </Border>
 
-                            <Separator Margin="0,12"/>
-
-                            <TextBlock Text="Repair artwork references"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,4"/>
-                            <TextBlock TextWrapping="Wrap"
-                                       FontSize="11"
-                                       Foreground="Gray"
-                                       Margin="0,0,0,8">
-                                If some games show solid black covers or backgrounds, they are
-                                pointing at plugin artwork that no longer exists - Playnite draws
-                                a missing image as black rather than as an empty tile. This clears
-                                those references so Playnite shows its own placeholder instead,
-                                and your library plugin can fetch the artwork again. Deletes
-                                nothing.
+                    <Border Style="{StaticResource IrCard}">
+                        <StackPanel>
+                            <TextBlock Text="ffmpeg" Style="{StaticResource IrCardTitle}"/>
+                            <DockPanel Margin="0,0,0,6">
+                                <Button Content="Browse…" Style="{StaticResource IrButton}" DockPanel.Dock="Right"
+                                        Margin="8,0,0,0" Command="{Binding BrowseFfmpeg}"/>
+                                <TextBox Style="{StaticResource IrTextBox}"
+                                         Text="{Binding Settings.FfmpegPath, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource IrStatus}" Foreground="{Binding FfmpegStatus.Brush}" Margin="0,0,0,6">
+                                <Run Text="{Binding FfmpegStatus.Glyph, Mode=OneWay}"/> <Run Text="{Binding FfmpegStatus.Message, Mode=OneWay}"/>
                             </TextBlock>
-                            <Button Content="Repair artwork references"
-                                    HorizontalAlignment="Left"
-                                    Padding="12,6"
+                            <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,0,0,0"
+                                       Text="Converts animated GIFs to MP4 - markedly smaller, and played by hardware rather than decoded frame by frame on the UI thread. Not bundled: ffmpeg is GPL-licensed and this plugin is MIT, so shipping the binary would change the licence of the whole project."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource IrCard}">
+                        <StackPanel>
+                            <TextBlock Text="yt-dlp" Style="{StaticResource IrCardTitle}"/>
+                            <DockPanel Margin="0,0,0,6">
+                                <Button Content="Browse…" Style="{StaticResource IrButton}" DockPanel.Dock="Right"
+                                        Margin="8,0,0,0" Command="{Binding BrowseYtDlp}"/>
+                                <TextBox Style="{StaticResource IrTextBox}"
+                                         Text="{Binding Settings.YtDlpPath, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource IrStatus}" Foreground="{Binding YtDlpStatus.Brush}" Margin="0,0,0,6">
+                                <Run Text="{Binding YtDlpStatus.Glyph, Mode=OneWay}"/> <Run Text="{Binding YtDlpStatus.Message, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,0,0,0"
+                                       Text="Imports video from YouTube and similar sites as animated backgrounds and covers. Needs ffmpeg as well, which converts the download into the MP4 the plugin plays, and deno below to read YouTube at all. Also not bundled, for the same reason."/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource IrCard}">
+                        <StackPanel>
+                            <TextBlock Text="deno" Style="{StaticResource IrCardTitle}"/>
+                            <DockPanel Margin="0,0,0,6">
+                                <Button Content="Browse…" Style="{StaticResource IrButton}" DockPanel.Dock="Right"
+                                        Margin="8,0,0,0" Command="{Binding BrowseDeno}"/>
+                                <TextBox Style="{StaticResource IrTextBox}"
+                                         Text="{Binding Settings.DenoPath, UpdateSourceTrigger=PropertyChanged}"/>
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource IrStatus}" Foreground="{Binding DenoStatus.Brush}" Margin="0,0,0,6">
+                                <Run Text="{Binding DenoStatus.Glyph, Mode=OneWay}"/> <Run Text="{Binding DenoStatus.Message, Mode=OneWay}"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,0,0,0"
+                                       Text="yt-dlp's JavaScript runtime. YouTube hides its streams behind challenges that have to be solved by running JavaScript, and yt-dlp hands that to deno. Without it a YouTube search returns nothing, with no error to say why. Get it from deno.com, or put deno.exe next to yt-dlp.exe and both are found together."/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Style="{StaticResource IrHintFlush}"
+                               Text="Leave a path blank and the plugin looks on your PATH. Set one explicitly if you keep the tool somewhere else."/>
+
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
+
+        <!-- ================================ GENERAL ================================ -->
+        <TabItem Header="General">
+            <ScrollViewer Style="{StaticResource IrPage}">
+                <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
+
+                    <TextBlock Text="General" Style="{StaticResource IrPageTitle}"/>
+                    <TextBlock Style="{StaticResource IrPageSubtitle}"
+                               Text="Rotates game background and cover artwork - stills, GIFs and video - in Desktop and Fullscreen mode."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="ROTATION" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <CheckBox Style="{StaticResource IrToggle}" Content="Enable rotation"
+                              IsChecked="{Binding Settings.EnableRotation}"/>
+                    <TextBlock Style="{StaticResource IrHint}"
+                               Text="Master switch. When off, ImageRotater does nothing and leaves your theme's own artwork handling untouched."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="THEMES" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <CheckBox Style="{StaticResource IrToggle}" Content="Work with themes built for BackgroundChanger"
+                              IsChecked="{Binding Settings.BackgroundChangerCompatibility}"/>
+                    <TextBlock Style="{StaticResource IrHint}"
+                               Text="Answers to the background element BackgroundChanger themes already use, so such a theme needs no edits. BackgroundChanger must be disabled - the two cannot run together. Takes effect after restarting Playnite."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="TROUBLESHOOTING" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <CheckBox Style="{StaticResource IrToggle}" Content="Enable debug logging"
+                              IsChecked="{Binding Settings.EnableDebugLogging}"/>
+                    <TextBlock Style="{StaticResource IrHint}"
+                               Text="Writes ImageRotater.log next to the plugin's data. Leave off for normal use."/>
+
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
+
+        <!-- ================================ BACKGROUNDS ================================ -->
+        <TabItem Header="Backgrounds">
+            <ScrollViewer Style="{StaticResource IrPage}">
+                <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
+
+                    <TextBlock Text="Backgrounds" Style="{StaticResource IrPageTitle}"/>
+                    <TextBlock Style="{StaticResource IrPageSubtitle}"
+                               Text="Playnite's own background is always updated, which is what makes rotation work in every theme. A theme hosting the ImageRotater element gets GIF and video on top."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="TRANSITION" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+                    <TextBlock Style="{StaticResource IrHintFlush}"
+                               Text="How the background changes to the next still, in both Desktop and Fullscreen mode. A flash fills the whole screen here, so crossfade is the safe choice."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Crossfade" GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"/>
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Fade through black" GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"/>
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Fade through white" GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"/>
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Cut (no animation)" GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="SHAPE" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <CheckBox Style="{StaticResource IrToggle}" Content="Letterbox odd-shaped backgrounds"
+                              IsChecked="{Binding Settings.LetterboxBackgrounds}"/>
+                    <TextBlock Style="{StaticResource IrHint}"
+                               Text="When a game only has odd-shaped backgrounds (ultrawide banners, squares), they are pinned to the top of a screen-shaped canvas and fade into a blurred fill of themselves. The original files are never modified."/>
+
+                    <CheckBox Style="{StaticResource IrToggle}" Content="Level background sizes"
+                              IsChecked="{Binding Settings.NormaliseBackgroundSize}"/>
+                    <TextBlock Style="{StaticResource IrHint}"
+                               Text="Publishes every background for a game at one width. Playnite blurs the window background by a fixed amount after scaling, so backgrounds of different resolutions get visibly different blur - and switching between them makes the blur jump. Levelling the width removes that. The original files are never modified."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="WHEN A GAME HAS SEVERAL" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+                    <TextBlock Style="{StaticResource IrHintFlush}"
+                               Text="Games with only one image are unaffected."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Pick once per session" GroupName="SelectionMode"
+                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Session}"/>
+                    <TextBlock Style="{StaticResource IrRadioHint}"
+                               Text="Chooses an image the first time you see a game and keeps it until Playnite restarts. Artwork stays put while you browse."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Pick again every time the game is selected" GroupName="SelectionMode"
+                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=EverySelection}"/>
+                    <TextBlock Style="{StaticResource IrRadioHint}"
+                               Text="A different image each time you land on a game. Backgrounds rotate as you leave a game, so the change is never visible mid-switch."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Always use the same image" GroupName="SelectionMode"
+                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Fixed}"/>
+                    <TextBlock Style="{StaticResource IrRadioHint}"
+                               Text="Always shows the first image alphabetically. No rotation at all."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="SLIDESHOW" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
+                        <TextBlock Text="Change every" Style="{StaticResource IrLabel}" Width="112"/>
+                        <Slider Style="{StaticResource IrSlider}" Width="240"
+                                Minimum="0" Maximum="300" TickFrequency="5" IsSnapToTickEnabled="True"
+                                Value="{Binding Settings.BackgroundSlideshowSeconds}"/>
+                        <TextBlock Style="{StaticResource IrValue}"
+                                   Text="{Binding Settings.BackgroundSlideshowSeconds, StringFormat='{}{0:0} s'}"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,4,0,12"
+                               Text="While a game stays selected. 0 turns the slideshow off; anything below 5 is treated as off. Each change uses the transition above."/>
+
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
+
+        <!-- ================================ COVERS ================================ -->
+        <TabItem Header="Covers">
+            <ScrollViewer Style="{StaticResource IrPage}">
+                <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
+
+                    <TextBlock Text="Covers" Style="{StaticResource IrPageTitle}"/>
+                    <TextBlock Style="{StaticResource IrPageSubtitle}"
+                               Text="Covers are managed separately from backgrounds: each game has its own covers folder, and cover art is chosen to match the shape of your grid cells rather than simply the largest image."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="ROTATION" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <CheckBox Style="{StaticResource IrToggle}" Content="Rotate cover art (box art)"
+                              IsChecked="{Binding Settings.RotateCovers}"/>
+                    <TextBlock Style="{StaticResource IrHint}"
+                               Text="Off by default, since covers are usually curated deliberately."/>
+
+                    <CheckBox Style="{StaticResource IrToggleChild}" Content="Play animated covers on every tile, not just the selected one"
+                              IsChecked="{Binding Settings.AnimateUnfocusedCovers}"
+                              IsEnabled="{Binding Settings.RotateCovers}"/>
+                    <TextBlock Style="{StaticResource IrHintIndented}"
+                               Text="Off by default for a reason: every animated tile decodes frames continuously, and Playnite is a 32-bit process. A library where many games have GIF or video covers can run it out of memory while scrolling. The selected tile always animates either way."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="TRANSITION" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+                    <TextBlock Style="{StaticResource IrHintFlush}"
+                               Text="How a cover changes to the next still, in both Desktop and Fullscreen mode. Animated covers and videos keep their own fades."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Crossfade" GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"/>
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Fade through black" GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"/>
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Fade through white" GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"/>
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Cut (no animation)" GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="WHEN A GAME HAS SEVERAL" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+                    <TextBlock Style="{StaticResource IrHintFlush}"
+                               Text="Covers rotate when you land on a game, and the grid tile updates in place."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Pick once per session" GroupName="CoverSelectionMode"
+                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Session}"/>
+                    <TextBlock Style="{StaticResource IrRadioHint}"
+                               Text="A fresh cover per Playnite launch. The grid stays calm while you browse."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Pick again every time the game is selected" GroupName="CoverSelectionMode"
+                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=EverySelection}"/>
+                    <TextBlock Style="{StaticResource IrRadioHint}"
+                               Text="The tile changes each time you land on the game. Lively, but the grid reshuffles as you navigate."/>
+
+                    <RadioButton Style="{StaticResource IrRadio}" Content="Always use the same image" GroupName="CoverSelectionMode"
+                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Fixed}"/>
+                    <TextBlock Style="{StaticResource IrRadioHint}"
+                               Text="Always shows the first image alphabetically. No rotation at all."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="SLIDESHOW" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
+                        <TextBlock Text="Change every" Style="{StaticResource IrLabel}" Width="112"/>
+                        <Slider Style="{StaticResource IrSlider}" Width="240"
+                                Minimum="0" Maximum="300" TickFrequency="5" IsSnapToTickEnabled="True"
+                                Value="{Binding Settings.CoverSlideshowSeconds}"/>
+                        <TextBlock Style="{StaticResource IrValue}"
+                                   Text="{Binding Settings.CoverSlideshowSeconds, StringFormat='{}{0:0} s'}"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,4,0,12"
+                               Text="While a game stays selected. 0 turns the slideshow off; anything below 5 is treated as off. The selected game's tile changes in place, using the transition above."/>
+
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
+
+        <!-- ================================ LIBRARY ================================ -->
+        <TabItem Header="Library">
+            <ScrollViewer Style="{StaticResource IrPage}">
+                <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
+
+                    <TextBlock Text="Library" Style="{StaticResource IrPageTitle}"/>
+                    <TextBlock Style="{StaticResource IrPageSubtitle}"
+                               Text="Maintenance for the artwork ImageRotater already holds. Conversions replace each original only once its replacement exists, so an interrupted run leaves your library exactly as it was."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="CONVERT" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <Button Style="{StaticResource IrButton}" Content="Convert all GIFs to MP4"
+                            Margin="0,4,0,0" Command="{Binding ConvertGifs}"/>
+                    <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,4,0,12"
+                               Text="Much smaller, and played by hardware rather than decoded frame by frame on the UI thread. Needs ffmpeg."/>
+
+                    <Button Style="{StaticResource IrButton}" Content="Convert all JPEGs to PNG"
+                            Command="{Binding ConvertJpegs}"/>
+                    <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,4,0,12"
+                               Text="Lossless, so no further quality is lost each time an image is processed - but the files get considerably larger. Quality already lost to JPEG does not come back."/>
+
+                    <Button Style="{StaticResource IrButton}" Content="Repair videos (fix black tiles)"
+                            Command="{Binding RepairVideos}"/>
+                    <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,4,0,12"
+                               Text="Videos downloaded in a fragmented format show as solid black even though nothing reports an error. This rewrites just the container - no quality loss, healthy videos untouched. Also available per game from the right-click menu. Needs ffmpeg."/>
+
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="REPAIR" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <Border Style="{StaticResource IrCard}">
+                        <StackPanel>
+                            <TextBlock Text="Repair artwork references" Style="{StaticResource IrCardTitle}"/>
+                            <TextBlock Style="{StaticResource IrHintFlush}"
+                                       Text="If some games show solid black covers or backgrounds, they are pointing at plugin artwork that no longer exists - Playnite draws a missing image as black rather than as an empty tile. This clears those references so Playnite shows its own placeholder instead, and your library plugin can fetch the artwork again. Deletes nothing."/>
+                            <Button Style="{StaticResource IrButton}" Content="Repair artwork references"
                                     Command="{Binding RepairArtwork}"
                                     CommandParameter="{Binding RelativeSource={RelativeSource Self}}"/>
                         </StackPanel>
                     </Border>
 
-                </StackPanel>
-            </ScrollViewer>
-        </TabItem>
+                    <Border Style="{StaticResource IrSectionBar}">
+                        <TextBlock Text="DANGER ZONE" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
 
-        <TabItem Header="General">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="20">
-
-                    <TextBlock Text="ImageRotater"
-                               FontSize="18"
-                               FontWeight="Bold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="Rotates game background and cover artwork, built for smooth performance in Fullscreen themes."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,20"/>
-
-                    <CheckBox Content="Enable rotation"
-                              IsChecked="{Binding Settings.EnableRotation}"
-                              Margin="0,5"/>
-                    <TextBlock Text="Master switch. When off, ImageRotater does nothing and leaves your theme's own artwork handling untouched."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-
-                    <CheckBox Content="Work with themes built for BackgroundChanger"
-                              IsChecked="{Binding Settings.BackgroundChangerCompatibility}"
-                              Margin="0,5"/>
-                    <TextBlock Text="Answers to the background element BackgroundChanger themes already use, so such a theme needs no edits. BackgroundChanger must be disabled - the two cannot run together. Takes effect after restarting Playnite."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                    <CheckBox Content="Enable debug logging"
-                              IsChecked="{Binding Settings.EnableDebugLogging}"
-                              Margin="0,5"/>
-                    <TextBlock Text="Writes ImageRotater.log next to the plugin's data for troubleshooting. Leave off for normal use."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                </StackPanel>
-            </ScrollViewer>
-        </TabItem>
-
-        <TabItem Header="Backgrounds">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="20">
-
-                    <!-- No display-mode choice any more, deliberately. Playnite's
-                         own background is always updated - that is what makes
-                         rotation work in every theme - and a theme hosting the
-                         ImageRotater element simply gets the richer rendering
-                         on top. Both at once was already the only behaviour
-                         that made sense, and the old radio buttons just made
-                         users pick between two things they were getting
-                         anyway. -->
-
-                    <TextBlock Text="Transition between still backgrounds"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="How the background changes to the next still, in both Desktop and Fullscreen mode. A flash fills the whole screen here, so crossfade is the safe choice."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8"/>
-
-                    <RadioButton Content="Crossfade"
-                                 GroupName="BackgroundTransition"
-                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Fade through black"
-                                 GroupName="BackgroundTransition"
-                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Fade through white"
-                                 GroupName="BackgroundTransition"
-                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Cut (no animation)"
-                                 GroupName="BackgroundTransition"
-                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"
-                                 Margin="0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <CheckBox Content="Letterbox odd-shaped backgrounds"
-                              IsChecked="{Binding Settings.LetterboxBackgrounds}"
-                              Margin="0,8,0,4"/>
-                    <TextBlock Text="When a game only has odd-shaped backgrounds (ultrawide banners, squares), they are pinned to the top of a screen-shaped canvas and fade into a blurred fill of themselves. The original files are never modified."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                    <CheckBox Content="Level background sizes"
-                              IsChecked="{Binding Settings.NormaliseBackgroundSize}"
-                              Margin="0,8,0,4"/>
-                    <TextBlock Text="Publishes every background for a game at one width. Playnite blurs the window background by a fixed amount applied after the image is scaled, so backgrounds of different resolutions get visibly different blur - and switching between them makes the blur jump. Levelling the width removes that. The original files are never modified."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="When a game has several backgrounds"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="Games with only one image are unaffected by this setting."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8"/>
-
-                    <RadioButton Content="Pick once per session"
-                                 GroupName="SelectionMode"
-                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Session}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="Chooses an image the first time you see a game and keeps it until Playnite restarts. Artwork stays put while you browse."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,8"/>
-
-                    <RadioButton Content="Pick again every time the game is selected"
-                                 GroupName="SelectionMode"
-                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=EverySelection}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="A different image each time you land on a game. Backgrounds rotate as you leave a game, so the change is never visible mid-switch."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,8"/>
-
-                    <RadioButton Content="Always use the same image"
-                                 GroupName="SelectionMode"
-                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Fixed}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="Always shows the first image alphabetically. No rotation at all."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="Slideshow"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
-                        <TextBlock Text="Change the background every"
-                                   VerticalAlignment="Center"/>
-                        <TextBox Text="{Binding Settings.BackgroundSlideshowSeconds, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="50"
-                                 Margin="6,0"
-                                 VerticalContentAlignment="Center"/>
-                        <TextBlock Text="seconds while a game stays selected"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <TextBlock Text="0 turns the slideshow off; anything below 5 is treated as off. The change crossfades using Playnite's own background transition."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,4"/>
-
-                </StackPanel>
-            </ScrollViewer>
-        </TabItem>
-
-        <TabItem Header="Covers">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="20">
-
-                    <CheckBox Content="Rotate cover art (box art)"
-                              IsChecked="{Binding Settings.RotateCovers}"
-                              Margin="0,5"/>
-                    <TextBlock Text="Covers are managed separately from backgrounds - each game has its own covers folder, and cover art is chosen to match the shape of your grid cells rather than simply the largest image. Off by default, since covers are usually curated deliberately."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                    <CheckBox Content="Play animated covers on every tile, not just the selected one"
-                              IsChecked="{Binding Settings.AnimateUnfocusedCovers}"
-                              IsEnabled="{Binding Settings.RotateCovers}"
-                              Margin="20,8,0,4"/>
-                    <TextBlock Text="Off by default for a reason: every animated tile decodes frames continuously, and Playnite is a 32-bit process. A library where many games have GIF or video covers can run it out of memory while scrolling. The selected tile always animates either way."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="40,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="Transition between still covers"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="How a cover changes to the next still, in both Desktop and Fullscreen mode. Animated covers and videos keep their own fades."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8"/>
-
-                    <RadioButton Content="Crossfade"
-                                 GroupName="CoverTransition"
-                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Fade through black"
-                                 GroupName="CoverTransition"
-                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Fade through white"
-                                 GroupName="CoverTransition"
-                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Cut (no animation)"
-                                 GroupName="CoverTransition"
-                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"
-                                 Margin="0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="When a game has several covers"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="Covers rotate when you land on a game, and the grid tile updates in place."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8"/>
-
-                    <RadioButton Content="Pick once per session (changes on Playnite startup)"
-                                 GroupName="CoverSelectionMode"
-                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Session}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="A fresh cover per Playnite launch. The grid stays calm while you browse."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,8"/>
-
-                    <RadioButton Content="Pick again every time the game is selected"
-                                 GroupName="CoverSelectionMode"
-                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=EverySelection}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="The tile changes each time you land on the game. Lively, but the grid reshuffles as you navigate."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,8"/>
-
-                    <RadioButton Content="Always use the same image"
-                                 GroupName="CoverSelectionMode"
-                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Fixed}"
-                                 Margin="0,4"/>
-                    <TextBlock Text="Always shows the first image alphabetically. No rotation at all."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="20,0,0,4"/>
-
-                    <Separator Margin="0,16"/>
-
-                    <TextBlock Text="Slideshow"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
-                        <TextBlock Text="Change the cover every"
-                                   VerticalAlignment="Center"/>
-                        <TextBox Text="{Binding Settings.CoverSlideshowSeconds, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="50"
-                                 Margin="6,0"
-                                 VerticalContentAlignment="Center"/>
-                        <TextBlock Text="seconds while a game stays selected"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
-                    <TextBlock Text="0 turns the slideshow off; anything below 5 is treated as off. The selected game's tile updates in place; the swap is instant on Playnite's own tiles."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,4"/>
+                    <!-- Last, and boxed in red, so it is not something you reach by accident on
+                         the way to a path box. -->
+                    <Border Style="{StaticResource IrCardDanger}">
+                        <StackPanel>
+                            <TextBlock Text="Reset library" Style="{StaticResource IrCardTitleDanger}"/>
+                            <TextBlock Style="{StaticResource IrHintFlush}"
+                                       Text="Deletes every image and video ImageRotater holds for your whole library, and puts each game back to its own artwork. Your games keep the covers and backgrounds they had before the plugin touched them; anything downloaded through it is gone for good. You will be asked to confirm, and Playnite will offer to restart afterwards."/>
+                            <Button Style="{StaticResource IrButtonDanger}" Content="Delete all plugin artwork and restore originals"
+                                    Command="{Binding ResetLibrary}"
+                                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"/>
+                        </StackPanel>
+                    </Border>
 
                 </StackPanel>
             </ScrollViewer>

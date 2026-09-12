@@ -1,0 +1,662 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      The settings page look, shared with UniPlaySong and SuperScroll.
+
+      A settings page hosted inside somebody else's WPF application inherits that application's
+      decisions unless it states its own. Foreground, FontSize and FontWeight are INHERITABLE: a
+      TextBlock that leaves Foreground unset takes it from the Playnite window, which may be
+      near-white on one theme and near-black on another. So every style here states its colours
+      and metrics outright, and the page paints its own ground, so the contrast pair is decided
+      here rather than borrowed.
+
+      Every control gets an EXPLICIT style too. A theme's implicit `<Style TargetType="CheckBox">`
+      applies to any CheckBox without one - and those routinely carry a Template, a fixed Height
+      and Padding of their own (Mythos sizes every ToggleButton to 28px, which is what squashed the
+      search tiles). Keyed, never implicit: an implicit style here would leak into the rest of the
+      settings window.
+    -->
+
+    <!-- Palette. Same slate and cyan as UniPlaySong, so the two plugins read as one family. -->
+    <SolidColorBrush x:Key="IrGround"     Color="#12171E"/>
+    <SolidColorBrush x:Key="IrSurface"    Color="#1A222C"/>
+    <SolidColorBrush x:Key="IrSurfaceHi"  Color="#232D3A"/>
+    <SolidColorBrush x:Key="IrStroke"     Color="#31404F"/>
+    <SolidColorBrush x:Key="IrStrokeHi"   Color="#4A5F73"/>
+    <SolidColorBrush x:Key="IrAccent"     Color="#4CC2FF"/>
+    <SolidColorBrush x:Key="IrText"       Color="#E4E9EF"/>
+    <SolidColorBrush x:Key="IrTextMuted"  Color="#93A1B0"/>
+    <SolidColorBrush x:Key="IrWarn"       Color="#C8A24B"/>
+    <SolidColorBrush x:Key="IrDanger"     Color="#E08070"/>
+
+    <!-- The page ground is a slow diagonal rather than a flat fill: a flat ground gives a
+         translucent card nothing to sit on. The range is tiny on purpose. -->
+    <LinearGradientBrush x:Key="IrGroundGlass" StartPoint="0,0" EndPoint="0.85,1">
+        <GradientStop Offset="0"   Color="#1A212B"/>
+        <GradientStop Offset="0.5" Color="#161C25"/>
+        <GradientStop Offset="1"   Color="#131922"/>
+    </LinearGradientBrush>
+
+    <!-- ============================== Page shell ============================== -->
+
+    <!-- Padding sits here rather than on the inner panel so the ground fills the whole page
+         instead of leaving a theme-coloured gutter round the edge. -->
+    <Style x:Key="IrPage" TargetType="ScrollViewer">
+        <Setter Property="Background" Value="{StaticResource IrGroundGlass}"/>
+        <Setter Property="Padding" Value="22,18,22,24"/>
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource IrText}"/>
+    </Style>
+
+    <Style x:Key="IrPageTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource IrText}"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+
+    <Style x:Key="IrPageSubtitle" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="Foreground" Value="{StaticResource IrTextMuted}"/>
+        <Setter Property="FontStyle" Value="Italic"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Margin" Value="0,0,0,18"/>
+    </Style>
+
+    <!-- Section heading with a left accent bar, so groups of settings read as bands rather than
+         another line of bold text. Title text goes in as UPPERCASE. -->
+    <Style x:Key="IrSectionBar" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{StaticResource IrAccent}"/>
+        <Setter Property="BorderThickness" Value="3,0,0,0"/>
+        <Setter Property="Padding" Value="10,1,0,1"/>
+        <Setter Property="Margin" Value="0,14,0,10"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="IrSectionTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource IrTextMuted}"/>
+    </Style>
+
+    <!-- ============================== Type ============================== -->
+
+    <!-- Indent lines the hint up with the toggle's LABEL, not its switch: 24 track + 8 gap. -->
+    <Style x:Key="IrHint" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="{StaticResource IrTextMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Margin" Value="32,1,0,12"/>
+    </Style>
+
+    <Style x:Key="IrHintIndented" TargetType="TextBlock" BasedOn="{StaticResource IrHint}">
+        <Setter Property="Margin" Value="56,1,0,12"/>
+    </Style>
+
+    <!-- Same hint, no indent: prose under a section bar or inside a card. -->
+    <Style x:Key="IrHintFlush" TargetType="TextBlock" BasedOn="{StaticResource IrHint}">
+        <Setter Property="Margin" Value="0,1,0,8"/>
+    </Style>
+
+    <Style x:Key="IrWarning" TargetType="TextBlock" BasedOn="{StaticResource IrHint}">
+        <Setter Property="Foreground" Value="{StaticResource IrWarn}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style x:Key="IrWarningFlush" TargetType="TextBlock" BasedOn="{StaticResource IrWarning}">
+        <Setter Property="Margin" Value="0,1,0,8"/>
+    </Style>
+
+    <Style x:Key="IrLabel" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource IrText}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="IrValue" TargetType="TextBlock" BasedOn="{StaticResource IrLabel}">
+        <Setter Property="Foreground" Value="{StaticResource IrAccent}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="12,0,0,0"/>
+        <Setter Property="MinWidth" Value="48"/>
+    </Style>
+
+    <!-- A status line under a field: the glyph and message share one colour, which the view
+         model chooses - so Foreground is bound there rather than set here. -->
+    <Style x:Key="IrStatus" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ============================== Cards ============================== -->
+
+    <!-- Smoked glass laid on the ground, with a bevelled edge lit top-left. The alpha stays near
+         0xE6 so the ground's diagonal still shows through. -->
+    <LinearGradientBrush x:Key="IrGlassNeutral" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#E6161D28"/>
+        <GradientStop Offset="1" Color="#E60B0F16"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrGlassWarn" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#E61E180D"/>
+        <GradientStop Offset="1" Color="#E6100C06"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrGlassDanger" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#E6301416"/>
+        <GradientStop Offset="1" Color="#E61C0B0C"/>
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="IrBevelNeutral" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0"    Color="#93A6B8"/>
+        <GradientStop Offset="0.12" Color="#63768A"/>
+        <GradientStop Offset="0.55" Color="#3A4757"/>
+        <GradientStop Offset="1"    Color="#1E262F"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrBevelWarn" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0"    Color="#E0BC70"/>
+        <GradientStop Offset="0.12" Color="#B99548"/>
+        <GradientStop Offset="0.55" Color="#7E6329"/>
+        <GradientStop Offset="1"    Color="#453516"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrBevelDanger" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0"    Color="#D07A78"/>
+        <GradientStop Offset="0.12" Color="#A85350"/>
+        <GradientStop Offset="0.55" Color="#743634"/>
+        <GradientStop Offset="1"    Color="#3E1D1C"/>
+    </LinearGradientBrush>
+
+    <Style x:Key="IrCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource IrGlassNeutral}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrBevelNeutral}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="14,12"/>
+        <Setter Property="Margin" Value="0,0,0,12"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <!-- The shadow costs ClearType inside the card; the hint puts it back. -->
+        <Setter Property="RenderOptions.ClearTypeHint" Value="Enabled"/>
+        <Setter Property="UseLayoutRounding" Value="True"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="#000000" BlurRadius="9" ShadowDepth="2"
+                                  Direction="270" Opacity="0.38"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Caveats, anything with a "but" in it. -->
+    <Style x:Key="IrCardWarn" TargetType="Border" BasedOn="{StaticResource IrCard}">
+        <Setter Property="Background" Value="{StaticResource IrGlassWarn}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrBevelWarn}"/>
+    </Style>
+
+    <!-- "This cannot be undone." Reserved for destructive actions; used for ordinary caution
+         it stops meaning anything. -->
+    <Style x:Key="IrCardDanger" TargetType="Border" BasedOn="{StaticResource IrCard}">
+        <Setter Property="Background" Value="{StaticResource IrGlassDanger}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrBevelDanger}"/>
+    </Style>
+
+    <!-- A card's own heading: two steps clear of a label in size and weight, so a card of rows
+         does not read as four labels with the first slightly bolder. -->
+    <Style x:Key="IrCardTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13.5"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource IrText}"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+    </Style>
+
+    <Style x:Key="IrCardTitleDanger" TargetType="TextBlock" BasedOn="{StaticResource IrCardTitle}">
+        <Setter Property="Foreground" Value="{StaticResource IrDanger}"/>
+    </Style>
+
+    <!-- ============================== Toggle ============================== -->
+
+    <!-- A machined panel switch: a recessed groove, a bevelled cap lit from above, an indicator
+         sunk into the cap. Sized against the 12.5px label beside it so the two read as one row.
+         Background, BorderBrush and Tag carry the ON colours, so a derived style can recolour the
+         switch without restating the template. -->
+    <LinearGradientBrush x:Key="IrKnobFace" StartPoint="0.3,0" EndPoint="0.7,1">
+        <GradientStop Offset="0"    Color="#FFFFFF"/>
+        <GradientStop Offset="0.30" Color="#E8EFF6"/>
+        <GradientStop Offset="0.62" Color="#B2C0CE"/>
+        <GradientStop Offset="1"    Color="#75838F"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrKnobFaceHover" StartPoint="0.3,0" EndPoint="0.7,1">
+        <GradientStop Offset="0"    Color="#FFFFFF"/>
+        <GradientStop Offset="0.30" Color="#F6FAFE"/>
+        <GradientStop Offset="0.62" Color="#D2DEEA"/>
+        <GradientStop Offset="1"    Color="#94A3B2"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrGrooveOff" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0"    Color="#0F151C"/>
+        <GradientStop Offset="0.55" Color="#1E2733"/>
+        <GradientStop Offset="1"    Color="#2C3843"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrGrooveOn" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0"    Color="#154759"/>
+        <GradientStop Offset="0.55" Color="#1E7391"/>
+        <GradientStop Offset="1"    Color="#3BACD1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="IrOnRim" Color="#1F5F76"/>
+    <SolidColorBrush x:Key="IrLedOn" Color="#A7E8FF"/>
+    <LinearGradientBrush x:Key="IrLipSheen" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0"   Color="#00FFFFFF"/>
+        <GradientStop Offset="0.5" Color="#62FFFFFF"/>
+        <GradientStop Offset="1"   Color="#00FFFFFF"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrLipSheenHover" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Offset="0"   Color="#00FFFFFF"/>
+        <GradientStop Offset="0.5" Color="#B8FFFFFF"/>
+        <GradientStop Offset="1"   Color="#00FFFFFF"/>
+    </LinearGradientBrush>
+    <!-- Sub-option on state: deep blue beside the cyan parent, a stop or two quieter. -->
+    <LinearGradientBrush x:Key="IrGrooveOnSub" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0"    Color="#16273F"/>
+        <GradientStop Offset="0.55" Color="#22406B"/>
+        <GradientStop Offset="1"    Color="#3A63A0"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="IrOnRimSub" Color="#1E355C"/>
+    <SolidColorBrush x:Key="IrLedOnSub" Color="#A8C6F0"/>
+
+    <Style x:Key="IrToggle" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource IrText}"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,7,0,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Background" Value="{StaticResource IrGrooveOn}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrOnRim}"/>
+        <Setter Property="Tag" Value="{StaticResource IrLedOn}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Grid Width="24" Height="13" VerticalAlignment="Center">
+                            <Border x:Name="Track"
+                                    Background="{StaticResource IrGrooveOff}"
+                                    BorderBrush="#0B1015" BorderThickness="1"
+                                    SnapsToDevicePixels="True" UseLayoutRounding="True"/>
+                            <Border Height="2.5" VerticalAlignment="Top"
+                                    Margin="1,1,1,0" IsHitTestVisible="False"
+                                    Background="#20000000"/>
+                            <Border x:Name="Lip" Height="1" VerticalAlignment="Top"
+                                    Margin="2,0,2,0" IsHitTestVisible="False"
+                                    Background="{StaticResource IrLipSheen}"/>
+                            <Border x:Name="Thumb" Width="12" Height="10"
+                                    Background="{StaticResource IrKnobFace}"
+                                    BorderBrush="#4B5764" BorderThickness="0.75"
+                                    HorizontalAlignment="Left" Margin="1.5,0,0,0"
+                                    SnapsToDevicePixels="True">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#000000" BlurRadius="1"
+                                                      ShadowDepth="0.8" Direction="270" Opacity="0.4"/>
+                                </Border.Effect>
+                                <Grid>
+                                    <Border Height="1" VerticalAlignment="Top" Margin="1,0,1,0" Background="#69FFFFFF"/>
+                                    <Border Height="1" VerticalAlignment="Bottom" Margin="1,0,1,0" Background="#56000000"/>
+                                    <Border VerticalAlignment="Top" Height="4.5">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Offset="0" Color="#54FFFFFF"/>
+                                                <GradientStop Offset="1" Color="#00FFFFFF"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                    <Ellipse x:Name="Led" Width="3" Height="3" Fill="#6B7885"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                                             Opacity="0.45"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <ContentPresenter x:Name="Label"
+                                          Margin="8,0,0,0" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <!-- The cap throws, it does not glide: an alignment swap is correct the
+                             instant it renders, where a slide would leave every toggle already
+                             on at the wrong end when the window opens. -->
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Track" Property="Background"
+                                    Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <Setter TargetName="Track" Property="BorderBrush"
+                                    Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="Thumb" Property="Margin" Value="0,0,1.5,0"/>
+                            <Setter TargetName="Led" Property="Fill"
+                                    Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            <Setter TargetName="Led" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Thumb" Property="Background" Value="{StaticResource IrKnobFaceHover}"/>
+                            <Setter TargetName="Thumb" Property="BorderBrush" Value="#A9BAC9"/>
+                            <Setter TargetName="Lip" Property="Background" Value="{StaticResource IrLipSheenHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Track" Property="Opacity" Value="0.35"/>
+                            <Setter TargetName="Label" Property="Opacity" Value="0.35"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A nested toggle: only means anything while its parent is on. Indented and lit blue. -->
+    <Style x:Key="IrToggleChild" TargetType="CheckBox" BasedOn="{StaticResource IrToggle}">
+        <Setter Property="Margin" Value="24,7,0,0"/>
+        <Setter Property="Background" Value="{StaticResource IrGrooveOnSub}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrOnRimSub}"/>
+        <Setter Property="Tag" Value="{StaticResource IrLedOnSub}"/>
+    </Style>
+
+    <!-- ============================== Radio ============================== -->
+
+    <!-- Circular where the toggle is square: the shape is the affordance. Same construction -
+         recessed well, bevelled rim, a lit dot when selected. -->
+    <LinearGradientBrush x:Key="IrWellFace" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0"   Color="#0E141A"/>
+        <GradientStop Offset="0.6" Color="#1B232E"/>
+        <GradientStop Offset="1"   Color="#28323D"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrWellRim" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0"   Color="#5A6A7A"/>
+        <GradientStop Offset="0.5" Color="#2C3743"/>
+        <GradientStop Offset="1"   Color="#141A21"/>
+    </LinearGradientBrush>
+
+    <Style x:Key="IrRadio" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource IrText}"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Margin" Value="0,6,0,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <Grid Width="14" Height="14" VerticalAlignment="Center">
+                            <Ellipse x:Name="Well"
+                                     Fill="{StaticResource IrWellFace}"
+                                     Stroke="{StaticResource IrWellRim}" StrokeThickness="1"/>
+                            <Ellipse x:Name="Dot" Width="6" Height="6"
+                                     Fill="{StaticResource IrAccent}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                                     Opacity="0"/>
+                        </Grid>
+                        <ContentPresenter x:Name="Label" Margin="8,0,0,0"
+                                          VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Dot" Property="Opacity" Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Well" Property="Stroke" Value="#8CA0B4"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Well" Property="Opacity" Value="0.35"/>
+                            <Setter TargetName="Label" Property="Opacity" Value="0.35"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Hint under a radio: lines up with its label. 14 well + 8 gap. -->
+    <Style x:Key="IrRadioHint" TargetType="TextBlock" BasedOn="{StaticResource IrHint}">
+        <Setter Property="Margin" Value="22,1,0,6"/>
+    </Style>
+
+    <!-- ============================== Inputs ============================== -->
+
+    <!-- A recess rather than a raised panel - the inverse of the button, which is what an input
+         should read as. Left unstyled it renders as WPF's stark white box. -->
+    <Style x:Key="IrTextBox" TargetType="TextBox">
+        <Setter Property="Foreground" Value="{StaticResource IrText}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource IrAccent}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource IrAccent}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Padding" Value="7,4"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Background" Value="{StaticResource IrWellFace}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrWellRim}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Well" CornerRadius="4"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"
+                                      Focusable="False" HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Well" Property="BorderBrush" Value="{StaticResource IrAccent}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Well" Property="BorderBrush" Value="{StaticResource IrStrokeHi}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Well" Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="IrSlider" TargetType="Slider">
+        <Setter Property="Foreground" Value="{StaticResource IrAccent}"/>
+        <Setter Property="Background" Value="{StaticResource IrSurfaceHi}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="IsMoveToPointEnabled" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid VerticalAlignment="Center">
+                        <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                Background="{TemplateBinding Background}"/>
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <!-- Transparent, not empty: a zero-size template makes
+                                                 the track un-clickable. -->
+                                            <Border Background="Transparent" Height="18">
+                                                <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                                        Background="{StaticResource IrAccent}"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Background="Transparent" Height="18"/>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Width="14" Height="14" Focusable="False">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Ellipse Fill="{StaticResource IrText}"
+                                                     Stroke="{StaticResource IrGround}"
+                                                     StrokeThickness="2"/>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================== Buttons ============================== -->
+
+    <!-- The same bevelled panel as the cards, at control scale. Pressed inverts the bevel. -->
+    <LinearGradientBrush x:Key="IrButtonFace" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#2B3644"/>
+        <GradientStop Offset="1" Color="#1D2530"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrButtonFaceHover" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#384656"/>
+        <GradientStop Offset="1" Color="#26303C"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrButtonRim" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0"   Color="#7C8EA0"/>
+        <GradientStop Offset="0.5" Color="#3C4959"/>
+        <GradientStop Offset="1"   Color="#212934"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrButtonDangerFace" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#6A2E2C"/>
+        <GradientStop Offset="1" Color="#3F1C1B"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrButtonDangerFaceHover" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#7E3936"/>
+        <GradientStop Offset="1" Color="#4C2321"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="IrButtonDangerRim" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0"   Color="#D07A78"/>
+        <GradientStop Offset="0.5" Color="#8A4643"/>
+        <GradientStop Offset="1"   Color="#3E1D1C"/>
+    </LinearGradientBrush>
+
+    <Style x:Key="IrButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource IrText}"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Padding" Value="12,5"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Background" Value="{StaticResource IrButtonFace}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrButtonRim}"/>
+        <Setter Property="Tag" Value="{StaticResource IrButtonFaceHover}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Face" CornerRadius="4"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Face" Property="Background"
+                                    Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Face" Property="Background" Value="{StaticResource IrWellFace}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Face" Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Irreversible only. -->
+    <Style x:Key="IrButtonDanger" TargetType="Button" BasedOn="{StaticResource IrButton}">
+        <Setter Property="Background" Value="{StaticResource IrButtonDangerFace}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource IrButtonDangerRim}"/>
+        <Setter Property="Tag" Value="{StaticResource IrButtonDangerFaceHover}"/>
+    </Style>
+
+    <!-- ============================== Navigation rail ============================== -->
+
+    <!-- A full-width row that marks selection with a left accent bar - the TabItem's own left
+         border, so nothing has to be kept in sync with the row's height. -->
+    <Style x:Key="IrRailItem" TargetType="TabItem">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="Row"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="3,0,0,0"
+                            Padding="13,9"
+                            Cursor="Hand"
+                            TextElement.Foreground="{StaticResource IrTextMuted}"
+                            TextElement.FontSize="12.5"
+                            TextElement.FontWeight="Normal">
+                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Row" Property="Background" Value="{StaticResource IrSurface}"/>
+                            <Setter TargetName="Row" Property="TextElement.Foreground" Value="{StaticResource IrText}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Row" Property="Background" Value="{StaticResource IrSurfaceHi}"/>
+                            <Setter TargetName="Row" Property="BorderBrush" Value="{StaticResource IrAccent}"/>
+                            <Setter TargetName="Row" Property="TextElement.Foreground" Value="{StaticResource IrText}"/>
+                            <Setter TargetName="Row" Property="TextElement.FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- MinWidth rather than Width so a longer page name widens the rail instead of clipping. -->
+    <Style x:Key="IrRail" TargetType="TabControl">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource IrRailItem}"/>
+        <Setter Property="Background" Value="{StaticResource IrGround}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0"
+                                Background="{StaticResource IrGround}"
+                                BorderBrush="{StaticResource IrStroke}"
+                                BorderThickness="0,0,1,0">
+                            <StackPanel IsItemsHost="True" MinWidth="132" Margin="0,8"/>
+                        </Border>
+                        <ContentPresenter Grid.Column="1" ContentSource="SelectedContent"/>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>
