@@ -1,9 +1,11 @@
 using System;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 
 namespace ImageRotater.Services
 {
@@ -65,6 +67,8 @@ namespace ImageRotater.Services
                 return false;
             }
 
+            var image = target as Image;
+
             Brush brush;
             if (IsFlash)
             {
@@ -74,7 +78,6 @@ namespace ImageRotater.Services
             {
                 // A crossfade needs the OLD picture, and only an Image has one
                 // to snapshot.
-                var image = target as Image;
                 if (image?.Source == null)
                 {
                     return false;
@@ -106,24 +109,13 @@ namespace ImageRotater.Services
                 {
                     veil.Opacity = 0.0;
                     var up = new DoubleAnimation(1.0, new Duration(Half));
-                    up.Completed += (s, e) =>
-                    {
-                        try
-                        {
-                            swap();
-                        }
-                        finally
-                        {
-                            Lower(Half);
-                        }
-                    };
+                    up.Completed += (s, e) => SwapThen(image, swap, () => Lower(Half));
                     veil.BeginAnimation(UIElement.OpacityProperty, up);
                 }
                 else
                 {
                     veil.Opacity = 1.0;
-                    swap();
-                    Lower(Duration);
+                    SwapThen(image, swap, () => Lower(Duration));
                 }
             }
             catch
@@ -133,6 +125,60 @@ namespace ImageRotater.Services
             }
 
             return true;
+        }
+
+        // Runs the swap, then the continuation once the new picture is
+        // actually on the element.
+        //
+        // Playnite binds its cover tiles with IsAsync, so the write that
+        // swap() makes reaches the Image's Source a beat later, from a worker
+        // thread. Continuing straight after the swap uncovered the OLD cover
+        // and the new one then popped in mid-fade - exactly the hard cut the
+        // transition exists to hide. A backstop keeps a tile from staying
+        // veiled if the source never changes: the write failed, or the same
+        // picture was picked again.
+        public static void SwapThen(Image image, Action swap, Action then)
+        {
+            ImageSource before = image?.Source;
+
+            try
+            {
+                swap();
+            }
+            catch
+            {
+                then();
+                throw;
+            }
+
+            if (image == null || !ReferenceEquals(image.Source, before))
+            {
+                then();
+                return;
+            }
+
+            var descriptor = DependencyPropertyDescriptor.FromProperty(Image.SourceProperty, typeof(Image));
+            var backstop = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+            EventHandler onChanged = null;
+
+            void Done()
+            {
+                backstop.Stop();
+                descriptor.RemoveValueChanged(image, onChanged);
+                then();
+            }
+
+            onChanged = (s, e) =>
+            {
+                if (!ReferenceEquals(image.Source, before))
+                {
+                    Done();
+                }
+            };
+
+            backstop.Tick += (s, e) => Done();
+            descriptor.AddValueChanged(image, onChanged);
+            backstop.Start();
         }
 
         // A flat brush drawn over exactly the adorned element's bounds. Follows

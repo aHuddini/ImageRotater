@@ -161,19 +161,22 @@ namespace ImageRotater.Services
                 try
                 {
                     // Playnite's own notification swaps the source while the
-                    // tile is invisible - both modes, since 10.57.
-                    RunSwapSafely(swap);
-
-                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(
-                        0.0, 1.0, new Duration(Transition.Half));
-
-                    fadeIn.Completed += (s2, e2) =>
+                    // tile is invisible - both modes, since 10.57. The fade
+                    // back up waits for that source to land, since the
+                    // binding is asynchronous.
+                    Transition.SwapThen(cover, () => RunSwapSafely(swap), () =>
                     {
-                        cover.BeginAnimation(UIElement.OpacityProperty, null);
-                        cover.Opacity = 1.0;
-                    };
+                        var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(
+                            0.0, 1.0, new Duration(Transition.Half));
 
-                    cover.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                        fadeIn.Completed += (s2, e2) =>
+                        {
+                            cover.BeginAnimation(UIElement.OpacityProperty, null);
+                            cover.Opacity = 1.0;
+                        };
+
+                        cover.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                    });
                 }
                 catch (Exception)
                 {
