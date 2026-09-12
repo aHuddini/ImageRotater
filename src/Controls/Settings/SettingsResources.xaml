@@ -663,4 +663,57 @@
         </Setter>
     </Style>
 
+    <!-- The strip along the top of a rail entry: its pages. Underlined rather than a second
+         boxed tab, so it reads as subordinate to the rail instead of competing with it. -->
+    <Style x:Key="IrStripItem" TargetType="TabItem">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="Tab"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="0,0,0,2"
+                            Padding="13,8,13,6"
+                            Cursor="Hand"
+                            TextElement.Foreground="{StaticResource IrTextMuted}"
+                            TextElement.FontSize="12"
+                            TextElement.FontWeight="Normal">
+                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Tab" Property="TextElement.Foreground" Value="{StaticResource IrText}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Tab" Property="BorderBrush" Value="{StaticResource IrAccent}"/>
+                            <Setter TargetName="Tab" Property="TextElement.Foreground" Value="{StaticResource IrText}"/>
+                            <Setter TargetName="Tab" Property="TextElement.FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Keyed, not implicit: an implicit TabControl style would cascade into the pages. -->
+    <Style x:Key="IrStrip" TargetType="TabControl">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource IrStripItem}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top"
+                                Background="{StaticResource IrSurface}"
+                                BorderBrush="{StaticResource IrStroke}"
+                                BorderThickness="0,0,0,1"
+                                Padding="8,0,8,0">
+                            <StackPanel Orientation="Horizontal" IsItemsHost="True"/>
+                        </Border>
+                        <ContentPresenter ContentSource="SelectedContent"/>
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>
