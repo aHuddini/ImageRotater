@@ -87,9 +87,13 @@ the reproduction is at [PLAYNITE_ISSUE_DRAFT.md](PLAYNITE_ISSUE_DRAFT.md).
                 VerticalAlignment="Stretch"/>
 ```
 
-Put that in the game tile template and the plugin renders the cover itself —
-stills, animated GIFs, and MP4/WebM video, whichever the rotation picked. No
-`MediaElement`, no path bindings, no triggers, no converters.
+Put that in the game tile template, **as a sibling after your own cover
+element, and leave that element alone.** The control draws only motion —
+animated GIFs and MP4/WebM video — and is transparent for a still. Stills are
+Playnite's job: the rotation writes `Game.CoverImage`, Playnite's
+`PART_ImageCover` shows it (Fullscreen since 10.57), and the plugin draws the
+transition over that tile. No `MediaElement`, no path bindings, no triggers,
+no converters.
 
 This works because the control's lifecycle inside a Fullscreen tile is healthy,
 which was worth confirming rather than assuming. Instrumented across 67
@@ -98,12 +102,9 @@ instances while scrolling a live grid: every one was constructed, received
 picked artwork and rendered it at full tile size. The earlier belief that these
 controls were built and never loaded came from a faulty measurement.
 
-The control already contains every renderer needed — an `Image` for stills,
-XamlAnimatedGif for GIFs, and a `MediaElement` for video — and switches between
-them per pick, keeping exactly one active so two cannot fight over the same
-tile.
-
-**Hide your own cover element while the plugin has one**, or the two stack:
+**Do not hide your own cover element** behind `EnableCoverImage` — with the
+plugin drawing only motion, a hidden cover would leave every still tile
+empty. The old advice below is kept for reference only:
 
 ```xml
 <Condition Binding="{PluginSettings Plugin=ImageRotater, Path=EnableCoverImage}" Value="True"/>

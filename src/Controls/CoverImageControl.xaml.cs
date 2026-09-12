@@ -13,32 +13,24 @@ namespace ImageRotater.Controls
     //
     // Still covers never come through here. Rotation writes Game.CoverImage,
     // Playnite notifies its own tile (Desktop always did; Fullscreen since
-    // 10.57), and Playnite's PART_ImageCover draws the new picture. No plugin
-    // control, no theme support, every theme, both modes.
+    // 10.57), and Playnite's PART_ImageCover draws the new picture, with the
+    // transition drawn over it by CoverTileTransition. No plugin control, no
+    // theme support, every theme, both modes. This control sits ABOVE that
+    // tile and is transparent whenever the pick is a still, so the two never
+    // disagree: there is only ever one picture of a still on screen.
     //
-    // What Playnite's Image can never do is play a file: it renders a
-    // BitmapSource, full stop. So a game whose cover is an MP4 or an animated
-    // GIF needs a MediaElement, and only a plugin can supply one - which is
-    // this control, and the sole reason it exists. Everything in here that
-    // looks elaborate - surviving tile recycling, fading video up only once
-    // its first frame exists, animating the selected tile only - is the cost
-    // of a media pipeline inside a virtualised grid. None of it is about
-    // stills.
+    // An earlier version drew stills here too, with its own crossfade layered
+    // over Playnite's - two renderers for the same tile, each transitioning on
+    // its own schedule. A recycled tile dissolved from the previous game's
+    // cover; a selection announcement re-resolved the same path and left a
+    // fade half-run; every landing flashed. All of it went with the still
+    // path. What is left is the cost of a media pipeline inside a virtualised
+    // grid: surviving tile recycling, fading video up only once its first
+    // frame exists, animating the selected tile only.
     //
-    // This control decides WHICH cover a game shows and publishes it as a path
-    // on its DataContext. It does not decode anything: the XAML binds that path
-    // with IsAsync=True, and a theme may instead keep this control hidden and
-    // bind Content.ImagePath to render the cover with its own element - which
-    // is how Aniki integrates BackgroundChanger.
-    //
-    // The earlier version assigned DisplayImage.Source in code-behind, which
-    // had two consequences. Nothing outside could bind to it, so themes could
-    // not reach the value at all. And it decoded during layout, so placing it
-    // in a Fullscreen grid template - dozens of tiles realising at once, in a
-    // 32-bit process - took Playnite down. That crash was the synchronous
-    // decode, not the presence of a plugin control: BackgroundChanger's
-    // equivalent survives the same placement precisely because it binds a path
-    // asynchronously.
+    // The pick is still published as a path on the DataContext, so a theme
+    // that prefers to draw the still with its own element can bind
+    // Content.ImagePath - the pattern Aniki uses for BackgroundChanger.
     public partial class CoverImageControl : PluginUserControl
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
@@ -73,8 +65,7 @@ namespace ImageRotater.Controls
             Unloaded += OnUnloaded;
         }
 
-        // What a theme binds when it hosts this control hidden and draws the
-        // cover itself.
+        // What a theme binds when it draws the still itself.
         //
         // Deliberately NOT called "Content": PluginUserControl inherits
         // ContentControl.Content, so that name would shadow an existing
@@ -101,11 +92,7 @@ namespace ImageRotater.Controls
         {
             ArtworkRotated -= OnArtworkRotated;
 
-            // Release the path so a recycled tile does not briefly show the
-            // previous game's cover. The binding owns the bitmap's lifetime.
-            // The GIF behaviour is released too - an unloaded tile must not
-            // keep an animation decoding frames forever.
-            _data.ImagePath = string.Empty;
+            // An unloaded tile must not keep a GIF decoding frames forever.
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
 
             // Video is released LATER, and only if this really was a teardown.
@@ -136,17 +123,12 @@ namespace ImageRotater.Controls
         // which for a virtualised grid is every time it scrolls into reuse.
         public override void GameContextChanged(Game oldContext, Game newContext)
         {
-            // Tear the previous game's video down BEFORE picking for the new
-            // one.
-            //
-            // A virtualised grid recycles these controls, so this is the moment
-            // one tile stops being Game A and becomes Game B. Refresh below
-            // handles it for a still pick - ShowStill stops the video first -
-            // but a video-to-video recycle went straight to ShowVideo, which
-            // assigns a new Source while the previous media is still open.
-            // Doing it here covers every case rather than the ones that happen
-            // to route through a helper that remembers.
-            StopVideo();
+            // A cut, never a transition: this tile IS a different game now,
+            // and Playnite's own tile cuts too. Tear the previous game's media
+            // down before picking for the new one - a video-to-video recycle
+            // otherwise assigns a new Source while the old media is still
+            // open.
+            ShowNothing();
 
             _previousPick = null;
             Refresh();
@@ -158,23 +140,10 @@ namespace ImageRotater.Controls
         // by Playnite on demand and there is no reference to hand them: the
         // rotation service announces, whoever is alive listens.
         //
-        // Matters most for video and GIFs. A still would merely be stale; a
-        // MediaElement keeps PLAYING the previous pick, so the slideshow would
-        // appear to do nothing at all while the file underneath it changed.
+        // A MediaElement keeps PLAYING the previous pick, so without this the
+        // slideshow would appear to do nothing at all while the file
+        // underneath it changed.
         public static event Action<Guid> ArtworkRotated;
-
-        // Whether any theme is hosting this control right now.
-        //
-        // A control subscribes on Loaded and unsubscribes on Unloaded, so a
-        // live subscriber means a theme has placed ImageRotater_Cover and it
-        // will crossfade its own picture. The slideshow uses this to skip
-        // fading Playnite's PART_ImageCover underneath - that fade would run
-        // beneath an opaque control, invisible, and for a video pick would be
-        // animating a tile nobody can see.
-        public static bool IsHostedByTheme
-        {
-            get { return ArtworkRotated != null; }
-        }
 
         public static void NotifyArtworkRotated(Guid gameId)
         {
@@ -186,16 +155,10 @@ namespace ImageRotater.Controls
             }
 
             // Marshalled to the UI thread HERE rather than at each call site.
-            //
-            // The Fullscreen slideshow raises this from inside a Task.Run - the
-            // cover write is done off-thread deliberately, so the fade window
-            // contains only the binding re-read. Every handler then reads
-            // GameContext, which is a WPF DependencyProperty and throws
-            // "The calling thread cannot access this object because a different
-            // thread owns it" when touched from anywhere else.
-            //
-            // Fixing it at the announcement means a future caller cannot
-            // reintroduce it by forgetting to marshal.
+            // Every handler reads GameContext, which is a WPF DependencyProperty
+            // and throws when touched from anywhere else. Fixing it at the
+            // announcement means a future caller cannot reintroduce it by
+            // forgetting to marshal.
             Application app = Application.Current;
 
             if (app != null && !app.Dispatcher.CheckAccess())
@@ -250,21 +213,6 @@ namespace ImageRotater.Controls
         // names the arriving game rather than this one.
         private bool _animating;
 
-        // Renders a motion pick as its own still frame, for a tile that is not
-        // selected. Same channel a static pick uses, so nothing else changes.
-        private void ShowStill(string path)
-        {
-            StopVideo();
-            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
-            _animating = false;
-
-            StagePreviousCover(path);
-            _data.ImagePath = path;
-
-            DisplayImage.Visibility = Visibility.Visible;
-            MissingImagePlaceholder.Visibility = Visibility.Collapsed;
-        }
-
         private void OnArtworkRotated(Guid gameId)
         {
             // Normally only this tile's own game - a grid raises this for one
@@ -294,13 +242,8 @@ namespace ImageRotater.Controls
             // Clearing this unconditionally was a regression: every wake -
             // including the selection announcement, which fires on every move -
             // wiped the avoid-previous memory, so in EverySelection mode tiles
-            // re-rolled their artwork constantly. Tiles that were merely told
-            // to re-read now keep their memory, and only the tile the rotation
-            // actually re-picked for starts fresh.
-            //
-            // "mine" is the test because the announcement names the game whose
-            // artwork moved on; a stand-down tile is being told to stop, not
-            // that its pick changed.
+            // re-rolled their artwork constantly. A stand-down tile is being
+            // told to stop, not that its pick changed.
             if (mine)
             {
                 _previousPick = null;
@@ -331,27 +274,20 @@ namespace ImageRotater.Controls
                 IReadOnlyList<string> candidates = _source.GetImagePaths(game);
                 if (candidates == null || candidates.Count == 0)
                 {
-                    // The common case: this game has no plugin cover. Render
-                    // nothing so the theme's own artwork shows through, and do
-                    // not log - it is not an error.
+                    // The common case: this game has no plugin cover. Playnite's
+                    // own artwork shows through, and it is not an error.
                     ShowNothing();
                     return;
                 }
 
                 // The pick the ROTATION made, when there is one for this game.
                 //
-                // Choosing again here meant two independent rolls for the same
-                // tile: the rotation writes Game.CoverImage, Playnite's own
-                // PART_ImageCover picks that up, and this control - drawing on
-                // top of it - had selected something else. Two different covers
-                // for one game, updating at different moments, which is the
-                // image seen flipping back and forth. One source of truth for
-                // the pick is the only fix, and it is not about how the tile
-                // underneath gets notified.
-                //
-                // The published value names the pick and the game it belongs
-                // to, set together by the publisher precisely so the two cannot
-                // drift apart.
+                // One source of truth for the pick: the rotation writes
+                // Game.CoverImage, Playnite's tile draws that, and this control
+                // must agree with it or a video plays over the poster of a
+                // different picture. The published value names the pick and
+                // the game it belongs to, set together by the publisher
+                // precisely so the two cannot drift apart.
                 string path = null;
 
                 if (string.Equals(settings.CurrentCoverGameId, game.Id.ToString(),
@@ -362,7 +298,7 @@ namespace ImageRotater.Controls
 
                 // No published pick for this game - a tile scrolled past
                 // without ever being selected, so rotation has not run for it.
-                // Choosing here is then the only way it shows anything.
+                // Choosing here is the only way an unselected tile can animate.
                 if (string.IsNullOrEmpty(path))
                 {
                     path = _selector.Select(
@@ -380,105 +316,52 @@ namespace ImageRotater.Controls
 
                 if (string.IsNullOrEmpty(path))
                 {
-                    // Every candidate is missing. Worth saying once per path.
+                    // Every candidate is missing. Worth saying once per path;
+                    // Playnite's tile shows what it has, and the Library page
+                    // has the repair for it.
                     if (_previousPick != null && _loggedFailures.Add(_previousPick))
                     {
                         Logger.Warn($"ImageRotater: no usable cover image for \"{game.Name}\"");
                     }
 
-                    ShowPlaceholder();
+                    ShowNothing();
+                    return;
+                }
+
+                // A still is Playnite's to draw. Published for themes that
+                // want it, and nothing rendered here.
+                if (!PosterFrame.IsMotion(path))
+                {
+                    ShowNothing();
+                    _data.ImagePath = path;
                     return;
                 }
 
                 // Moving artwork plays on the SELECTED tile only, unless the
-                // user asks otherwise.
+                // user asks otherwise. An unselected tile shows Playnite's
+                // poster frame of the same pick, which the publisher wrote for
+                // exactly this.
                 //
                 // Default is selected-only because a grid realises a screenful
                 // of these at once, and every animated one decodes continuously
                 // on the UI thread in a 32-bit process - the same pressure that
                 // took Playnite down when a theme put its own media element in
-                // every tile.
-                //
-                // But BackgroundChanger plays them everywhere and people like
-                // it, so the restriction is a setting rather than a rule. Left
-                // off by default: a wall of moving thumbnails is the option,
-                // not the expectation, and the failure mode of getting this
-                // wrong is Playnite running out of address space.
-                if (PosterFrame.IsMotion(path) && !IsSelectedTile
-                    && !settings.AnimateUnfocusedCovers)
+                // every tile. BackgroundChanger plays them everywhere and people
+                // like it, so the restriction is a setting rather than a rule.
+                if (!IsSelectedTile && !settings.AnimateUnfocusedCovers)
                 {
-                    string still = PosterFrame.For(path);
-
-                    if (!string.IsNullOrEmpty(still))
-                    {
-                        ShowStill(still);
-                        return;
-                    }
-
-                    // No still could be extracted - video, whose container GDI+
-                    // cannot open. Render nothing rather than start playback on
-                    // an unselected tile.
                     ShowNothing();
                     return;
                 }
 
-                // Video is a third channel, and a different renderer: WPF's
-                // imaging stack cannot decode a container, so this cannot be a
-                // mode of the Image.
                 if (PosterFrame.IsVideo(path))
                 {
                     ShowVideo(path);
-                    return;
                 }
-
-                // Exactly one channel drives the Image at a time. Static picks
-                // go through the DataContext path binding; GIFs go through
-                // XamlAnimatedGif's attached property, which owns Image.Source
-                // while active. Setting both would race - the one-channel rule
-                // that already bit this control once (the Content shadowing).
-                //
-                // Noted before the teardown: when a video WAS here, the still
-                // replacing it has no previous image to crossfade from, so
-                // TargetUpdated fades the incoming still itself instead.
-                _replacingVideo = DisplayVideo.Visibility == Visibility.Visible;
-                StopVideo();
-
-                if (PosterFrame.IsAnimated(path))
+                else if (PosterFrame.IsAnimated(path))
                 {
-                    // Order matters. The attached property takes Image.Source
-                    // synchronously, so it goes FIRST - clearing the binding
-                    // first would blank the tile until the animation loaded.
-                    XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, new Uri(path));
-                    _data.ImagePath = string.Empty;
-                    _animating = true;
-                    LowerVeil();
+                    ShowGif(path);
                 }
-                else
-                {
-                    // And the other way round here, for the opposite reason.
-                    //
-                    // The still arrives through a binding marked IsAsync=True,
-                    // so it lands some time AFTER this returns. Releasing the
-                    // animation first left Image.Source empty for that whole
-                    // gap - a visible blank on every animated-to-still
-                    // rotation. Handing over the path first means the old frame
-                    // stays up until the new image is decoded and ready.
-                    //
-                    // IsAsync is not negotiable: a synchronous decode inside a
-                    // Fullscreen tile's layout pass is what took Playnite down
-                    // before, so the fix has to work with the delay rather than
-                    // remove it.
-                    StagePreviousCover(path);
-                    _data.ImagePath = path;
-                    _animating = false;
-
-                    // The animation is released by the same TargetUpdated
-                    // handler that runs the crossfade, so there is no separate
-                    // deferral to get right.
-                }
-
-                DisplayImage.Visibility = Visibility.Visible;
-                MissingImagePlaceholder.Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
@@ -521,405 +404,99 @@ namespace ImageRotater.Controls
             return null;
         }
 
+        // Transparent: Playnite's tile is what shows. Both media stop, so a
+        // hidden tile is not decoding anything.
         private void ShowNothing()
         {
-            _data.ImagePath = string.Empty;
-            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
-            ClearPreviousCover();
-            LowerVeil();
-            DisplayImage.Visibility = Visibility.Collapsed;
-            MissingImagePlaceholder.Visibility = Visibility.Collapsed;
-        }
-
-        private void ShowPlaceholder()
-        {
+            ClearGif();
             _data.ImagePath = string.Empty;
-            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+        }
+
+        // XamlAnimatedGif owns Image.Source while its attached property is
+        // set; this is the one place that sets it.
+        private void ShowGif(string path)
+        {
             StopVideo();
-            ClearPreviousCover();
-            LowerVeil();
-            DisplayImage.Visibility = Visibility.Collapsed;
-            MissingImagePlaceholder.Visibility = Visibility.Visible;
-        }
 
-        // Parks the cover currently on screen on the layer underneath, so the
-        // incoming one has something to dissolve FROM.
-        //
-        // Called before the bound path changes. A Fullscreen tile's own cover
-        // is a plain Image rather than a FadeImage, so unlike backgrounds there
-        // is no theme transition to defer to - the plugin has to do this or the
-        // switch is a hard cut.
-        //
-        // Nothing is staged when the path is not actually changing. Refresh
-        // runs on every selection announcement and usually resolves the same
-        // published pick; the data context drops an unchanged path without a
-        // notification, so no picture arrives and no TargetUpdated fires to
-        // finish what was started here. A staged copy of the same cover was
-        // invisible; a veil raised for it stayed up - the tile went black on
-        // selection and only recovered at the next slideshow tick.
-        private void StagePreviousCover(string incomingPath)
-        {
-            try
+            var uri = new Uri(path);
+
+            // The same GIF asked for again - a selection announcement, a
+            // background slideshow tick - keeps playing rather than restarting
+            // from its first frame.
+            if (_animating && DisplayImage.Visibility == Visibility.Visible &&
+                uri.Equals(XamlAnimatedGif.AnimationBehavior.GetSourceUri(DisplayImage)))
             {
-                if (string.Equals(incomingPath, _data.ImagePath, StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                if (Transition.CoverStyle == TransitionStyle.Cut ||
-                    DisplayImage.Source == null || DisplayImage.Visibility != Visibility.Visible)
-                {
-                    ClearPreviousCover();
-                    return;
-                }
-
-                PreviousImage.Source = DisplayImage.Source;
-                PreviousImage.Opacity = 1.0;
-                PreviousImage.Visibility = Visibility.Visible;
-
-                // A flash goes up NOW, over the old picture, so it is full by
-                // the time the new one lands underneath it. The old layer is
-                // still staged: the picture can arrive before the veil is
-                // opaque, and must not show through early.
-                //
-                // And it usually does arrive first - a cached cover decodes in
-                // a few milliseconds. The lowering therefore waits for the
-                // raise to finish (see CrossfadePreviousCover), or the veil
-                // would turn round at a tenth of its height and no flash
-                // would ever be seen.
-                if (Transition.IsFlash(Transition.CoverStyle))
-                {
-                    Veil.Fill = new System.Windows.Media.SolidColorBrush(Transition.FlashColor(Transition.CoverStyle));
-                    Veil.Visibility = Visibility.Visible;
-
-                    int raise = ++_veilRaiseGeneration;
-                    _veilRising = true;
-                    _veilLowerPending = false;
-
-                    var up = new System.Windows.Media.Animation.DoubleAnimation(
-                        1.0, new Duration(Transition.Half));
-
-                    // Completed fires for a replaced animation too, so a raise
-                    // superseded by a newer one must not report that one done.
-                    up.Completed += (s, e) =>
-                    {
-                        if (raise != _veilRaiseGeneration)
-                        {
-                            return;
-                        }
-
-                        _veilRising = false;
-
-                        if (_veilLowerPending)
-                        {
-                            _veilLowerPending = false;
-                            DropVeil();
-                        }
-                    };
-
-                    Veil.BeginAnimation(OpacityProperty, up);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, "ImageRotater: could not stage the previous cover");
-            }
-        }
-
-        // Runs when the async binding actually delivers the new cover.
-        //
-        // This is the only moment the crossfade can start. The binding is
-        // asynchronous, so at the point the path was set the picture did not
-        // exist yet - an earlier version queued a dispatcher callback and hoped
-        // it landed afterwards, which is guesswork this event replaces.
-        private void DisplayImage_TargetUpdated(
-            object sender, System.Windows.Data.DataTransferEventArgs e)
-        {
-
-            // The GIF behaviour owns Image.Source while attached, and a still
-            // arriving means it is time to let go.
-            if (!string.IsNullOrEmpty(_data.ImagePath))
-            {
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
-            }
-
-            // Wait for the picture to be READY, not merely delivered.
-            //
-            // TargetUpdated says the binding produced a BitmapImage, which is
-            // not the same as that image having pixels: with IsAsync the decode
-            // can still be in flight. Fading the old layer out at this point
-            // uncovers an image that has not drawn yet, which is the flash of
-            // whatever sits behind the control.
-            CrossfadeWhenReady(DisplayImage.Source as System.Windows.Media.Imaging.BitmapImage);
-        }
-
-        // Starts the crossfade once the incoming image can actually be drawn.
-        //
-        // IsDownloading covers the case that matters here - a large still, or a
-        // file on a slow disk. A BitmapImage that is already decoded reports
-        // false and the fade starts immediately, so the common case costs
-        // nothing.
-        private void CrossfadeWhenReady(System.Windows.Media.Imaging.BitmapImage bitmap)
-        {
-            if (bitmap == null || !bitmap.IsDownloading)
-            {
-                CrossfadePreviousCover();
                 return;
             }
 
-            // Guarded by the same generation counter as the fade itself: a
-            // slow image that finishes after the user has moved on twice must
-            // not start a transition for a cover no longer on screen.
-            int generation = _fadeGeneration;
-
-            // A backstop, because waiting on an event that may never arrive is
-            // how a tile gets stuck showing its OLD cover forever.
-            //
-            // IsDownloading is true for a bitmap still being fetched, but the
-            // completion events are not guaranteed to fire for every source -
-            // a cached or already-decoded local file can report downloading and
-            // then simply never raise either one. Before this, that left the
-            // outgoing layer opaque over the new cover with nothing to clear
-            // it: the tile looked like it had not rotated at all.
-            var backstop = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(600)
-            };
-
-            backstop.Tick += (s, e) =>
-            {
-                backstop.Stop();
-
-                if (generation == _fadeGeneration)
-                {
-                    CrossfadePreviousCover();
-                }
-            };
-
-            backstop.Start();
-
-            System.EventHandler onReady = null;
-            System.EventHandler<System.Windows.Media.ExceptionEventArgs> onFailed = null;
-
-            onReady = (s, e) =>
-            {
-                backstop.Stop();
-                bitmap.DownloadCompleted -= onReady;
-                bitmap.DownloadFailed -= onFailed;
-
-                if (generation == _fadeGeneration)
-                {
-                    CrossfadePreviousCover();
-                }
-            };
-
-            // A failed decode still has to release the old layer, or it stays
-            // frozen on screen forever.
-            onFailed = (s, e) =>
-            {
-                backstop.Stop();
-                bitmap.DownloadCompleted -= onReady;
-                bitmap.DownloadFailed -= onFailed;
-
-                if (generation == _fadeGeneration)
-                {
-                    CrossfadePreviousCover();
-                }
-            };
-
-            bitmap.DownloadCompleted += onReady;
-            bitmap.DownloadFailed += onFailed;
+            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, uri);
+            DisplayImage.Visibility = Visibility.Visible;
+            _animating = true;
         }
 
-        // Dissolves the outgoing layer away, revealing the cover already opaque
-        // beneath it.
-        //
-        // The OLD layer fades, not the new one: the incoming cover is fully
-        // drawn underneath from the first frame, so nothing behind the control
-        // is ever visible through the transition. Fading the new one up would
-        // show the tile's own artwork through the gap.
-        private void CrossfadePreviousCover()
+        private void ClearGif()
         {
-            try
+            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+            DisplayImage.Visibility = Visibility.Collapsed;
+
+            if (DisplayVideo.Visibility != Visibility.Visible)
             {
-                // Under a flash there is nothing to dissolve: the new picture
-                // is already whole beneath the veil, so the old layer goes at
-                // once and the veil comes down over it - once it is fully up.
-                if (Veil.Visibility == Visibility.Visible)
-                {
-                    _replacingVideo = false;
-
-                    if (_veilRising)
-                    {
-                        _veilLowerPending = true;
-                    }
-                    else
-                    {
-                        DropVeil();
-                    }
-
-                    return;
-                }
-
-                if (PreviousImage.Source == null ||
-                    PreviousImage.Visibility != Visibility.Visible)
-                {
-                    // No outgoing image to dissolve - but if a VIDEO just left,
-                    // the still arriving in one frame was the only hard cut
-                    // this tile had. Fade the incoming image itself: the video
-                    // is gone, so there is nothing underneath to reveal early.
-                    if (_replacingVideo)
-                    {
-                        _replacingVideo = false;
-
-                        DisplayImage.BeginAnimation(
-                            OpacityProperty,
-                            new System.Windows.Media.Animation.DoubleAnimation(
-                                0.0, 1.0, new Duration(Transition.Duration)));
-                    }
-
-                    return;
-                }
-
-                _replacingVideo = false;
-
-                var fade = new System.Windows.Media.Animation.DoubleAnimation(
-                    1.0, 0.0, new Duration(Transition.Duration));
-
-                // Completed fires even for a REPLACED animation, so without a
-                // generation an older fade tears down the layer a newer one is
-                // still using.
-                int generation = ++_fadeGeneration;
-
-                fade.Completed += (s, e) =>
-                {
-                    if (generation == _fadeGeneration)
-                    {
-                        ClearPreviousCover();
-                    }
-                };
-
-                PreviousImage.BeginAnimation(OpacityProperty, fade);
-            }
-            catch (Exception ex)
-            {
-                ClearPreviousCover();
-                Logger.Warn(ex, "ImageRotater: could not crossfade the cover");
+                _animating = false;
             }
         }
 
-        private void ClearPreviousCover()
-        {
-            PreviousImage.BeginAnimation(OpacityProperty, null);
-            PreviousImage.Opacity = 1.0;
-            PreviousImage.Visibility = Visibility.Collapsed;
-            PreviousImage.Source = null;
-        }
-
-        // The veil is opaque and the new picture is whole beneath it: swap
-        // the layers out and bring the veil down over the result.
-        private void DropVeil()
-        {
-            ClearPreviousCover();
-
-            int veilGeneration = ++_fadeGeneration;
-            var lower = new System.Windows.Media.Animation.DoubleAnimation(
-                0.0, new Duration(Transition.Half));
-
-            lower.Completed += (s, e) =>
-            {
-                if (veilGeneration == _fadeGeneration)
-                {
-                    LowerVeil();
-                }
-            };
-
-            Veil.BeginAnimation(OpacityProperty, lower);
-        }
-
-        // Hard reset: no animation, no pending work.
-        private void LowerVeil()
-        {
-            _veilRising = false;
-            _veilLowerPending = false;
-            Veil.BeginAnimation(OpacityProperty, null);
-            Veil.Opacity = 0.0;
-            Veil.Visibility = Visibility.Collapsed;
-        }
-
-        private int _veilRaiseGeneration;
-        private bool _veilRising;
-        private bool _veilLowerPending;
-
-        private int _fadeGeneration;
-
-        // True while the still now arriving is replacing a video, so the fade
-        // runs on the incoming image - there is no outgoing layer to dissolve.
-        private bool _replacingVideo;
-
-        // Hands a video to the MediaElement and stands the Image down, so
-        // exactly one renderer draws.
+        // Hands a video to the MediaElement, so exactly one renderer draws.
         private void ShowVideo(string path)
         {
-            _data.ImagePath = string.Empty;
-            XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
-            LowerVeil();
-            DisplayImage.Visibility = Visibility.Collapsed;
-            MissingImagePlaceholder.Visibility = Visibility.Collapsed;
+            ClearGif();
 
-            ClearPreviousCover();
+            var uri = new Uri(path);
+
+            // Already playing this file: leave it be. WPF does not re-raise
+            // MediaOpened for a Source assigned again, so restarting from
+            // opacity 0 here left the video playing invisibly - hovering a tile
+            // made the animation "disappear" while nothing had stopped it.
+            if (DisplayVideo.Source != null &&
+                DisplayVideo.Visibility == Visibility.Visible &&
+                uri.Equals(DisplayVideo.Source))
+            {
+                return;
+            }
 
             // Invisible until the first frame exists - MediaOpened fades it
             // up. A MediaElement renders nothing before its media opens, so at
             // full opacity the still-to-video switch was a hard cut through a
-            // black rectangle: the one transition on this tile with no fade.
+            // black rectangle. Playnite's poster shows through until then.
             DisplayVideo.BeginAnimation(OpacityProperty, null);
+            DisplayVideo.Opacity = 0.0;
 
-            // Only a video arriving from NOTHING starts invisible.
-            //
-            // The fade-up is driven by MediaOpened, and WPF does not re-raise
-            // that when the same Source is assigned again - which is exactly
-            // what a refresh on the already-playing tile does. Starting at
-            // zero unconditionally therefore left the video playing at opacity
-            // 0 with the still showing through: hovering a tile made the
-            // animation "disappear" while nothing had stopped it.
-            bool alreadyShowing =
-                DisplayVideo.Source != null &&
-                DisplayVideo.Visibility == Visibility.Visible;
-
-            DisplayVideo.Opacity = alreadyShowing ? 1.0 : 0.0;
-
-            DisplayVideo.Source = new Uri(path);
+            DisplayVideo.Source = uri;
             DisplayVideo.Visibility = Visibility.Visible;
             DisplayVideo.Play();
             _animating = true;
 
-            // Backstop for the same reason the cover crossfade has one: if
-            // MediaOpened never arrives, nothing else would ever make this
-            // visible again.
-            if (!alreadyShowing)
+            // Backstop: if MediaOpened never arrives, nothing else would ever
+            // make this visible.
+            var reveal = new System.Windows.Threading.DispatcherTimer
             {
-                var reveal = new System.Windows.Threading.DispatcherTimer
+                Interval = TimeSpan.FromMilliseconds(700)
+            };
+
+            reveal.Tick += (s, e) =>
+            {
+                reveal.Stop();
+
+                if (DisplayVideo.Source != null &&
+                    DisplayVideo.Visibility == Visibility.Visible &&
+                    DisplayVideo.Opacity < 1.0)
                 {
-                    Interval = TimeSpan.FromMilliseconds(700)
-                };
+                    DisplayVideo.BeginAnimation(OpacityProperty, null);
+                    DisplayVideo.Opacity = 1.0;
+                }
+            };
 
-                reveal.Tick += (s, e) =>
-                {
-                    reveal.Stop();
-
-                    if (DisplayVideo.Source != null &&
-                        DisplayVideo.Visibility == Visibility.Visible &&
-                        DisplayVideo.Opacity < 1.0)
-                    {
-                        DisplayVideo.BeginAnimation(OpacityProperty, null);
-                        DisplayVideo.Opacity = 1.0;
-                    }
-                };
-
-                reveal.Start();
-            }
+            reveal.Start();
 
             // Start somewhere other than the beginning.
             //
@@ -982,11 +559,13 @@ namespace ImageRotater.Controls
             // whatever opacity this one died on.
             DisplayVideo.BeginAnimation(OpacityProperty, null);
             DisplayVideo.Opacity = 1.0;
-            _animating = false;
+
+            if (DisplayImage.Visibility != Visibility.Visible)
+            {
+                _animating = false;
+            }
         }
 
-        // Loop: artwork clips are short and meant to repeat, and MediaElement
-        // has no repeat property of its own.
         // Set when playback starts, consumed when the media reports its length.
         private bool _startAtRandomPoint;
 
@@ -995,15 +574,12 @@ namespace ImageRotater.Controls
         // millisecond would all pick the same "random" offset.
         private static readonly Random StartPoint = new Random();
 
-        // Seeks to a random point once the duration is known.
-        //
-        // Duration is not available until the media opens, so this cannot be
-        // done where Play() is called. Skips the last quarter, or a clip could
-        // open a moment before it loops - which looks like it failed to play.
+        // Fades the video up now that its first frame exists, and seeks to a
+        // random point once the duration is known. Skips the last quarter, or
+        // a clip could open a moment before it loops - which looks like it
+        // failed to play.
         private void DisplayVideo_MediaOpened(object sender, RoutedEventArgs e)
         {
-            // The first frame exists now; fading from here means the black
-            // pre-roll a MediaElement renders before opening is never seen.
             DisplayVideo.BeginAnimation(
                 OpacityProperty,
                 new System.Windows.Media.Animation.DoubleAnimation(
@@ -1045,6 +621,8 @@ namespace ImageRotater.Controls
             }
         }
 
+        // Loop: artwork clips are short and meant to repeat, and MediaElement
+        // has no repeat property of its own.
         private void DisplayVideo_MediaEnded(object sender, RoutedEventArgs e)
         {
             try
@@ -1059,21 +637,18 @@ namespace ImageRotater.Controls
         }
 
         // Usually a missing codec - Windows ships no .webm filter. Fall back to
-        // the theme's own artwork rather than a black rectangle.
+        // Playnite's poster rather than a black rectangle.
         private void DisplayVideo_MediaFailed(object sender, ExceptionRoutedEventArgs e)
         {
-            Logger.Warn(
-                $"ImageRotater: cover video failed for {GameContext?.Name} - "
-                + (e.ErrorException == null ? "no detail" : e.ErrorException.Message));
-
             string path = DisplayVideo.Source?.LocalPath;
 
             if (!string.IsNullOrEmpty(path) && _loggedFailures.Add(path))
             {
-                Logger.Warn($"ImageRotater: could not play cover video (missing codec?): {path}");
+                Logger.Warn(
+                    $"ImageRotater: cover video failed for {GameContext?.Name} (missing codec?): {path} - "
+                    + (e.ErrorException == null ? "no detail" : e.ErrorException.Message));
             }
 
-            StopVideo();
             ShowNothing();
         }
     }
