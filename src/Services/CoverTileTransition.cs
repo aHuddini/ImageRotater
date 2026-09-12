@@ -12,15 +12,12 @@ namespace ImageRotater.Services
     // A slideshow tick changes Game.CoverImage while the same game stays
     // selected. Playnite notifies the tile and it snaps to the new picture -
     // correct, but a hard cut every few seconds is not what a slideshow
-    // should look like. The swap runs behind the configured transition (see
-    // Transition), drawn over the tile in the adorner layer, so nothing is
-    // injected into the tile's tree and no theme support is needed.
-    //
-    // This class used to also force tiles to re-read their binding, because
-    // Playnite 10.56 and earlier never notified FullscreenListItemCoverObject
-    // when the cover changed. Playnite 10.57 raises that notification itself
-    // (upstream c48f3562), so that whole mechanism is gone.
-    public class FullscreenGridRefresher
+    // should look like. This finds the Image showing the game's cover -
+    // grid tile or details pane, either mode - and runs the swap behind the
+    // configured transition (see Transition), drawn over it in the adorner
+    // layer, so nothing is injected into the tile's tree and no theme
+    // support is needed.
+    public class CoverTileTransition
     {
         private static readonly ILogger Logger = LogManager.GetLogger();
 
@@ -31,7 +28,7 @@ namespace ImageRotater.Services
         private ListBox _grid;
         private bool _searched;
 
-        public FullscreenGridRefresher(FileLogger fileLogger = null)
+        public CoverTileTransition(FileLogger fileLogger = null)
         {
             _fileLogger = fileLogger;
         }
@@ -46,7 +43,7 @@ namespace ImageRotater.Services
         // null) so a lingering clock cannot pin a recycled container's opacity
         // for the session, and every failure path restores opacity 1 - a tile
         // must never stay invisible.
-        public void AnimatedSwap(Guid gameId, Action swap)
+        public void Run(Guid gameId, Action swap)
         {
             if (swap == null)
             {
@@ -57,7 +54,7 @@ namespace ImageRotater.Services
             {
                 Application.Current?.Dispatcher?.BeginInvoke(
                     DispatcherPriority.Background,
-                    new Action(() => AnimatedSwapNow(gameId, swap)));
+                    new Action(() => RunNow(gameId, swap)));
             }
             catch (Exception)
             {
@@ -67,7 +64,7 @@ namespace ImageRotater.Services
             }
         }
 
-        private void AnimatedSwapNow(Guid gameId, Action swap)
+        private void RunNow(Guid gameId, Action swap)
         {
             Image cover = null;
 
@@ -110,13 +107,13 @@ namespace ImageRotater.Services
                     if (cover == null)
                     {
                         _fileLogger.Log(
-                            $"animated swap fallback: grid={(grid != null)} item={(item != null)} "
+                            $"cover transition fallback: grid={(grid != null)} item={(item != null)} "
                             + $"container={(container != null)} cover=False");
                     }
                     else
                     {
                         _fileLogger.Log(
-                            $"animated swap target: name='{cover.Name}' "
+                            $"cover transition target: name='{cover.Name}' "
                             + $"{(int)cover.ActualWidth}x{(int)cover.ActualHeight} "
                             + $"visible={cover.IsVisible} opacity={cover.Opacity:0.##}");
                     }
@@ -371,8 +368,8 @@ namespace ImageRotater.Services
             _grid = FindGameGrid(window);
 
             _fileLogger?.Log(_grid != null
-                ? "fullscreen grid located for cover refresh"
-                : "fullscreen grid NOT found - covers will not refresh on tiles");
+                ? "library grid located for cover transitions"
+                : "library grid NOT found - cover swaps will search the window instead");
 
             return _grid;
         }

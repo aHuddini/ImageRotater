@@ -39,7 +39,7 @@ namespace ImageRotater
         private readonly BackgroundRotationService _rotationService;
         private readonly FileLogger _fileLogger;
         private readonly ArtworkPublisher _publisher;
-        private readonly FullscreenGridRefresher _gridRefresher;
+        private readonly CoverTileTransition _coverTransition;
 
         // Slideshow state: the game currently selected, and when each kind is
         // next due. One coarse timer serves both kinds - sub-second precision
@@ -154,7 +154,7 @@ namespace ImageRotater
             // this plugin wrote and leave it alone.
             _preserver = new OriginalArtPreserver(api, _store, _writer);
             _publisher = new ArtworkPublisher(_store, _fileLogger);
-            _gridRefresher = new FullscreenGridRefresher(_fileLogger);
+            _coverTransition = new CoverTileTransition(_fileLogger);
 
             _rotationService = new BackgroundRotationService(
                 _imageSource, _coverSource, _selector, _writer, _preserver, _store, () => Settings,
@@ -503,9 +503,9 @@ namespace ImageRotater
                         // made the cover change BEFORE the fade started - the
                         // swap was visible and then the fade played over it.
                         //
-                        // Writing inside the fade is what both modes now need:
-                        // the tile is told to re-read at the moment the fade
-                        // hides the change.
+                        // Writing inside the transition is what both modes
+                        // now need: the tile is told to re-read at the moment
+                        // the transition hides the change.
                         //
                         // Unless a theme hosts our control: it crossfades its
                         // own picture, and sits opaque over PART_ImageCover -
@@ -519,7 +519,7 @@ namespace ImageRotater
                         }
                         else
                         {
-                            _gridRefresher.AnimatedSwap(
+                            _coverTransition.Run(
                                 game.Id,
                                 () =>
                                 {
