@@ -4,22 +4,62 @@
                      xmlns:c="clr-namespace:Playnite.SDK.Controls;assembly=Playnite.SDK">
     <Grid x:Name="RootGrid" ClipToBounds="True">
 
-        <!-- Animated GIF only. XamlAnimatedGif drives this Image's Source
-             through its attached property; nothing else ever assigns it. A
-             still cover is not drawn here at all - Playnite's own
-             PART_ImageCover underneath shows it (see the class comment).
+        <!-- IsAsync=True is the load-bearing part, not a tuning choice.
+             Fullscreen realises many tiles at once, and a synchronous decode
+             inside the layout pass is what took Playnite down when an earlier
+             version of this control was placed in a grid template. Binding a
+             PATH asynchronously moves the decode off that thread.
 
              Stretch is set here rather than left to a hosting theme's implicit
              Image style. A theme cannot supply that style through
              ContentControl.Resources: Playnite's {Settings} markup extension is
              illegal in a Setter.Value, and the style is only sealed - and the
              exception only thrown - once the ContentControl actually resolves
-             to a plugin control. -->
+             to a plugin control. Aniki carries exactly such a Setter for
+             BackgroundChanger and never trips it, because that plugin is not
+             installed.
+
+             Themes wanting different sizing keep this control hidden and bind
+             CoverData.ImagePath, rendering it with their own element - which is
+             the integration pattern Aniki's author describes. -->
+        <!-- NotifyOnTargetUpdated is what drives the crossfade.
+             The binding is asynchronous, so the new picture arrives some time
+             after the path is set and there is no way to know when from the
+             code that set it. TargetUpdated fires exactly then, which is the
+             only correct moment to dissolve the old layer away. -->
         <Image x:Name="DisplayImage"
-               Visibility="Collapsed"
                Stretch="UniformToFill"
                StretchDirection="Both"
-               RenderOptions.BitmapScalingMode="Linear"/>
+               RenderOptions.BitmapScalingMode="Linear"
+               TargetUpdated="DisplayImage_TargetUpdated"
+               Source="{Binding ImagePath, IsAsync=True, NotifyOnTargetUpdated=True}"/>
+
+        <!-- The OUTGOING cover, and it must be declared AFTER DisplayImage.
+             Later children of a Grid draw on top, and this one has to be the
+             layer that fades AWAY - revealing the new picture already opaque
+             beneath it. Declared first, it sat underneath and dissolved while
+             completely hidden by the incoming cover: the animation ran
+             perfectly and was invisible, which looked like the fade doing
+             nothing at all.
+
+             One Image cannot dissolve into another - assigning Source is
+             instant - so two layers is the only way, and it is how Playnite's
+             own FadeImage does it. -->
+        <Image x:Name="PreviousImage"
+               Stretch="UniformToFill"
+               StretchDirection="Both"
+               RenderOptions.BitmapScalingMode="Linear"
+               Visibility="Collapsed"
+               IsHitTestVisible="False"/>
+
+        <!-- The flash for the fade-through-colour transitions: raised over
+             both still layers before the new picture is requested, lowered
+             once it has arrived. Sits below the video, which has its own
+             fades. See Transition. -->
+        <Rectangle x:Name="Veil"
+                   Opacity="0"
+                   Visibility="Collapsed"
+                   IsHitTestVisible="False"/>
 
         <!-- Video artwork, a renderer the Image cannot be: WPF's imaging stack
              does not decode containers. Only one of the two draws at a time.
@@ -49,6 +89,33 @@
                       MediaOpened="DisplayVideo_MediaOpened"
                       MediaEnded="DisplayVideo_MediaEnded"
                       MediaFailed="DisplayVideo_MediaFailed"/>
+
+        <!-- Shown only when a path exists but will not load, which is a real
+             fault worth surfacing. A game with no plugin cover renders nothing
+             so the theme's own artwork shows through - that is not an error. -->
+        <Viewbox x:Name="MissingImagePlaceholder"
+                 Visibility="Collapsed"
+                 Tag="{DynamicResource TextBrush}"
+                 Width="64" Height="64"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 Opacity="0.28">
+            <Canvas Width="24" Height="24">
+                <Path Data="M3,3 H21 V21 H3 Z"
+                      Stroke="{Binding Tag, ElementName=MissingImagePlaceholder, TargetNullValue=#FFCCCCCC, FallbackValue=#FFCCCCCC}"
+                      StrokeThickness="1.2"
+                      Fill="Transparent"/>
+                <Path Data="M9.2,9.1 C9.2,7.7 10.4,6.8 12,6.8 C13.6,6.8 14.8,7.7 14.8,9.1 C14.8,10.6 13.4,10.9 12.6,11.8 C12.2,12.3 12.1,12.8 12.1,13.6"
+                      Stroke="{Binding Tag, ElementName=MissingImagePlaceholder, TargetNullValue=#FFCCCCCC, FallbackValue=#FFCCCCCC}"
+                      StrokeThickness="1.4"
+                      Fill="Transparent"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"/>
+                <Ellipse Canvas.Left="11.35" Canvas.Top="15.2"
+                         Width="1.4" Height="1.4"
+                         Fill="{Binding Tag, ElementName=MissingImagePlaceholder, TargetNullValue=#FFCCCCCC, FallbackValue=#FFCCCCCC}"/>
+            </Canvas>
+        </Viewbox>
 
     </Grid>
 </c:PluginUserControl>

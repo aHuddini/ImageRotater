@@ -508,19 +508,26 @@ namespace ImageRotater
                         // now need: the tile is told to re-read at the moment
                         // the transition hides the change.
                         //
-                        // Hosted or not makes no difference. A theme's
-                        // ImageRotater_Cover draws only motion and sits
-                        // transparent over PART_ImageCover for a still, so the
-                        // transition on Playnite's tile is the one the user
-                        // sees; the announcement inside the swap is what
-                        // starts or stops a video on that same tile.
-                        _coverTransition.Run(
-                            game.Id,
-                            () =>
-                            {
-                                _rotationService.ApplyNext(game, ArtworkKind.Cover);
-                                CoverImageControl.NotifyArtworkRotated(game.Id);
-                            });
+                        // Unless a theme hosts our control: it crossfades its
+                        // own picture, and sits opaque over PART_ImageCover -
+                        // fading the tile underneath would be invisible work,
+                        // and for a video pick would animate something nobody
+                        // can see. Then the swap just runs.
+                        if (CoverImageControl.IsHostedByTheme)
+                        {
+                            _rotationService.ApplyNext(game, ArtworkKind.Cover);
+                            CoverImageControl.NotifyArtworkRotated(game.Id);
+                        }
+                        else
+                        {
+                            _coverTransition.Run(
+                                game.Id,
+                                () =>
+                                {
+                                    _rotationService.ApplyNext(game, ArtworkKind.Cover);
+                                    CoverImageControl.NotifyArtworkRotated(game.Id);
+                                });
+                        }
                     }
 
                     _coverDue = now.AddSeconds(Settings.CoverSlideshowSeconds);
