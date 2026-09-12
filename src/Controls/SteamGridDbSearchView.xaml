@@ -8,6 +8,12 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <!-- Playnite's WindowBase never sets Foreground, so a bare TextBlock in a
+             plugin window falls back to the system control colour - black on a dark
+             theme. Playnite's own windows fix this the same way (AboutWindow.xaml). -->
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="12">
@@ -231,8 +237,14 @@
                              list and would otherwise drop it silently.
                              A ToggleButton rather than a CheckBox with content, because
                              its template can be replaced outright - a CheckBox would
-                             still draw its own box beside the image. -->
-                        <ToggleButton IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                             still draw its own box beside the image.
+                             Style is nulled so the theme's implicit ToggleButton style
+                             cannot reach in: the template below is the whole look, and a
+                             theme that sizes its toggles (Mythos sets Height=28) would
+                             otherwise squash every tile to a 28px strip. -->
+                        <ToggleButton Style="{x:Null}"
+                                      Foreground="{DynamicResource TextBrush}"
+                                      IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                       Cursor="Hand"
                                       ToolTip="Click to select. Pick as many as you like, then Download selected."
                                       Background="Transparent"
