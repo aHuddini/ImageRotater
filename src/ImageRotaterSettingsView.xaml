@@ -326,33 +326,6 @@
 
                     <Separator Margin="0,16"/>
 
-                    <TextBlock Text="Transition between still images"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4"/>
-                    <TextBlock Text="How a background or cover changes to the next still, in both Desktop and Fullscreen mode. Animated covers and videos keep their own fades."
-                               FontSize="11"
-                               Foreground="Gray"
-                               TextWrapping="Wrap"
-                               Margin="0,0,0,8"/>
-
-                    <RadioButton Content="Crossfade"
-                                 GroupName="StillTransition"
-                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Fade through black"
-                                 GroupName="StillTransition"
-                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Fade through white"
-                                 GroupName="StillTransition"
-                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"
-                                 Margin="0,4"/>
-                    <RadioButton Content="Cut (no animation)"
-                                 GroupName="StillTransition"
-                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"
-                                 Margin="0,4"/>
-
-                    <Separator Margin="0,16"/>
 
                     <CheckBox Content="Work with themes built for BackgroundChanger"
                               IsChecked="{Binding Settings.BackgroundChangerCompatibility}"
@@ -388,6 +361,34 @@
                          that made sense, and the old radio buttons just made
                          users pick between two things they were getting
                          anyway. -->
+
+                    <TextBlock Text="Transition between still backgrounds"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4"/>
+                    <TextBlock Text="How the background changes to the next still, in both Desktop and Fullscreen mode. A flash fills the whole screen here, so crossfade is the safe choice."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <RadioButton Content="Crossfade"
+                                 GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Fade through black"
+                                 GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Fade through white"
+                                 GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Cut (no animation)"
+                                 GroupName="BackgroundTransition"
+                                 IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"
+                                 Margin="0,4"/>
+
+                    <Separator Margin="0,16"/>
 
                     <CheckBox Content="Letterbox odd-shaped backgrounds"
                               IsChecked="{Binding Settings.LetterboxBackgrounds}"
@@ -495,6 +496,34 @@
                                Foreground="Gray"
                                TextWrapping="Wrap"
                                Margin="40,0,0,4"/>
+
+                    <Separator Margin="0,16"/>
+
+                    <TextBlock Text="Transition between still covers"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4"/>
+                    <TextBlock Text="How a cover changes to the next still, in both Desktop and Fullscreen mode. Animated covers and videos keep their own fades."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <RadioButton Content="Crossfade"
+                                 GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Fade through black"
+                                 GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Fade through white"
+                                 GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Cut (no animation)"
+                                 GroupName="CoverTransition"
+                                 IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"
+                                 Margin="0,4"/>
 
                     <Separator Margin="0,16"/>
 

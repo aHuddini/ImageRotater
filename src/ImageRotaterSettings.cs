@@ -377,14 +377,23 @@ namespace ImageRotater
             set { selectionMode = value; OnPropertyChanged(); }
         }
 
-        // How one still replaces another - backgrounds and covers, Desktop
-        // and Fullscreen alike. Read by the renderers through Transition.
-        private TransitionStyle stillTransition = TransitionStyle.Crossfade;
+        // How one still replaces another, Desktop and Fullscreen alike. Read
+        // by the renderers through Transition. Separate for covers and
+        // backgrounds: a flash that is a beat on a tile is a strobe across
+        // the whole screen.
+        private TransitionStyle coverTransition = TransitionStyle.Crossfade;
+        private TransitionStyle backgroundTransition = TransitionStyle.Crossfade;
 
-        public TransitionStyle StillTransition
+        public TransitionStyle CoverTransition
         {
-            get => stillTransition;
-            set { stillTransition = value; OnPropertyChanged(); }
+            get => coverTransition;
+            set { coverTransition = value; OnPropertyChanged(); }
+        }
+
+        public TransitionStyle BackgroundTransition
+        {
+            get => backgroundTransition;
+            set { backgroundTransition = value; OnPropertyChanged(); }
         }
 
         public bool EnableDebugLogging
@@ -751,7 +760,8 @@ namespace ImageRotater
             // a user who just pointed the plugin at ffmpeg would have to
             // restart Playnite before anything used it.
             Services.GifConverter.ConfiguredPath = Settings?.FfmpegPath;
-            Transition.Style = Settings?.StillTransition ?? TransitionStyle.Crossfade;
+            Transition.CoverStyle = Settings?.CoverTransition ?? TransitionStyle.Crossfade;
+            Transition.BackgroundStyle = Settings?.BackgroundTransition ?? TransitionStyle.Crossfade;
 
             // Toggled settings apply on the next selection, not whenever each
             // game happens to rotate again.

@@ -13,8 +13,8 @@ using Playnite.SDK;
 namespace ImageRotater.Services
 {
     // Brings Playnite's own background transition in line with the plugin's
-    // Transition setting - and, for the default crossfade, stops it dipping
-    // dark on every change.
+    // background transition setting - and, for the default crossfade, stops
+    // it dipping dark on every change.
     //
     // Playnite's FadeImage crossfades by running fade-in (0 to 1) and fade-out
     // (1 to 0) SIMULTANEOUSLY. Two stacked layers at opacity t and 1-t let the
@@ -238,7 +238,7 @@ namespace ImageRotater.Services
 
             bool known = Patched.TryGetValue(fadeImage, out Tune tune);
 
-            if (known && tune.Style == Transition.Style)
+            if (known && tune.Style == Transition.BackgroundStyle)
             {
                 return false;
             }
@@ -254,7 +254,7 @@ namespace ImageRotater.Services
                 // still be mid-dissolve, outgoing layer on top, when the veil
                 // came down: the OLD picture showing through, then the new
                 // one arriving in the open.
-                TimeSpan duration = Transition.Style == TransitionStyle.Crossfade
+                TimeSpan duration = Transition.BackgroundStyle == TransitionStyle.Crossfade
                     ? Transition.Duration
                     : TimeSpan.Zero;
 
@@ -285,9 +285,9 @@ namespace ImageRotater.Services
                     fadeImage.Unloaded += tune.OnUnloaded;
                 }
 
-                tune.Style = Transition.Style;
+                tune.Style = Transition.BackgroundStyle;
 
-                if (Transition.IsFlash)
+                if (Transition.IsFlash(Transition.BackgroundStyle))
                 {
                     AddVeil(fadeImage, tune);
                 }
@@ -296,7 +296,7 @@ namespace ImageRotater.Services
                     RemoveVeil(fadeImage, tune);
                 }
 
-                Logger.Debug($"ImageRotater: tuned a FadeImage to {Transition.Style}");
+                Logger.Debug($"ImageRotater: tuned a FadeImage to {Transition.BackgroundStyle}");
                 return true;
             }
             catch (Exception ex)
@@ -346,7 +346,7 @@ namespace ImageRotater.Services
         {
             if (tune.Veil != null)
             {
-                tune.Veil.Fill = new SolidColorBrush(Transition.FlashColor);
+                tune.Veil.Fill = new SolidColorBrush(Transition.FlashColor(Transition.BackgroundStyle));
                 return;
             }
 
@@ -363,7 +363,7 @@ namespace ImageRotater.Services
 
             var veil = new Rectangle
             {
-                Fill = new SolidColorBrush(Transition.FlashColor),
+                Fill = new SolidColorBrush(Transition.FlashColor(Transition.BackgroundStyle)),
                 Opacity = 0.0,
                 IsHitTestVisible = false
             };

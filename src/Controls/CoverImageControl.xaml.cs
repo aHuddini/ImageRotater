@@ -567,7 +567,7 @@ namespace ImageRotater.Controls
                     return;
                 }
 
-                if (Transition.Style == TransitionStyle.Cut ||
+                if (Transition.CoverStyle == TransitionStyle.Cut ||
                     DisplayImage.Source == null || DisplayImage.Visibility != Visibility.Visible)
                 {
                     ClearPreviousCover();
@@ -588,9 +588,9 @@ namespace ImageRotater.Controls
                 // raise to finish (see CrossfadePreviousCover), or the veil
                 // would turn round at a tenth of its height and no flash
                 // would ever be seen.
-                if (Transition.IsFlash)
+                if (Transition.IsFlash(Transition.CoverStyle))
                 {
-                    Veil.Fill = new System.Windows.Media.SolidColorBrush(Transition.FlashColor);
+                    Veil.Fill = new System.Windows.Media.SolidColorBrush(Transition.FlashColor(Transition.CoverStyle));
                     Veil.Visibility = Visibility.Visible;
 
                     int raise = ++_veilRaiseGeneration;

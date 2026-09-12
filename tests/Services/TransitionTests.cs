@@ -15,30 +15,29 @@ namespace ImageRotater.Tests.Services
     {
         private readonly EnumRadioConverter _converter = new EnumRadioConverter();
 
-        [TearDown]
-        public void TearDown()
-        {
-            Transition.Style = TransitionStyle.Crossfade;
-        }
-
         [TestCase(TransitionStyle.Crossfade, false)]
         [TestCase(TransitionStyle.FadeThroughBlack, true)]
         [TestCase(TransitionStyle.FadeThroughWhite, true)]
         [TestCase(TransitionStyle.Cut, false)]
         public void Only_the_colour_styles_flash(TransitionStyle style, bool flash)
         {
-            Transition.Style = style;
-            Assert.That(Transition.IsFlash, Is.EqualTo(flash));
+            Assert.That(Transition.IsFlash(style), Is.EqualTo(flash));
         }
 
         [Test]
         public void White_is_white_and_everything_else_is_black()
         {
-            Transition.Style = TransitionStyle.FadeThroughWhite;
-            Assert.That(Transition.FlashColor, Is.EqualTo(Colors.White));
+            Assert.That(Transition.FlashColor(TransitionStyle.FadeThroughWhite), Is.EqualTo(Colors.White));
+            Assert.That(Transition.FlashColor(TransitionStyle.FadeThroughBlack), Is.EqualTo(Colors.Black));
+        }
 
-            Transition.Style = TransitionStyle.FadeThroughBlack;
-            Assert.That(Transition.FlashColor, Is.EqualTo(Colors.Black));
+        [Test]
+        public void Covers_and_backgrounds_are_chosen_independently()
+        {
+            Transition.CoverStyle = TransitionStyle.FadeThroughBlack;
+            Transition.BackgroundStyle = TransitionStyle.Crossfade;
+            Assert.That(Transition.CoverStyle, Is.Not.EqualTo(Transition.BackgroundStyle));
+            Transition.CoverStyle = TransitionStyle.Crossfade;
         }
 
         [Test]

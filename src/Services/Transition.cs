@@ -18,14 +18,18 @@ namespace ImageRotater.Services
         Cut                 // No animation at all
     }
 
-    // The one place the still transition is decided, so a background in
-    // Desktop, a cover tile in Fullscreen and a theme-hosted cover all move
-    // the same way. Three renderers draw stills - Playnite's FadeImage,
-    // Playnite's cover Image, and the plugin's own cover control - and each
-    // reads its style and timing from here.
+    // The one place the still transitions are decided, so a cover tile in
+    // Fullscreen and a theme-hosted cover move the same way, and a background
+    // does in either mode. Three renderers draw stills - Playnite's FadeImage
+    // for backgrounds, Playnite's cover Image and the plugin's own cover
+    // control for covers - and each reads its style and timing from here.
+    //
+    // Covers and backgrounds are chosen separately: a flash that reads as a
+    // beat on a small tile is a full-screen strobe on a background.
     public static class Transition
     {
-        public static TransitionStyle Style { get; set; } = TransitionStyle.Crossfade;
+        public static TransitionStyle CoverStyle { get; set; } = TransitionStyle.Crossfade;
+        public static TransitionStyle BackgroundStyle { get; set; } = TransitionStyle.Crossfade;
 
         // One duration for every renderer, so a cover and a background
         // changing together finish together. A flash spends half going up
@@ -33,15 +37,16 @@ namespace ImageRotater.Services
         public static readonly TimeSpan Duration = TimeSpan.FromMilliseconds(400);
         public static TimeSpan Half => TimeSpan.FromMilliseconds(Duration.TotalMilliseconds / 2);
 
-        public static bool IsFlash =>
-            Style == TransitionStyle.FadeThroughBlack || Style == TransitionStyle.FadeThroughWhite;
+        public static bool IsFlash(TransitionStyle style) =>
+            style == TransitionStyle.FadeThroughBlack || style == TransitionStyle.FadeThroughWhite;
 
-        public static Color FlashColor =>
-            Style == TransitionStyle.FadeThroughWhite ? Colors.White : Colors.Black;
+        public static Color FlashColor(TransitionStyle style) =>
+            style == TransitionStyle.FadeThroughWhite ? Colors.White : Colors.Black;
 
         // Transitions an element the plugin does not own - Playnite's cover
         // Image - around a swap of its source, without touching the element's
-        // tree: the veil is an adorner, WPF's own overlay layer.
+        // tree: the veil is an adorner, WPF's own overlay layer. Covers only,
+        // so it reads CoverStyle.
         //
         // Crossfade holds a snapshot of the current picture over the element,
         // swaps underneath it, and dissolves the snapshot. A flash raises a
@@ -55,7 +60,9 @@ namespace ImageRotater.Services
                 return false;
             }
 
-            if (Style == TransitionStyle.Cut)
+            TransitionStyle style = CoverStyle;
+
+            if (style == TransitionStyle.Cut)
             {
                 swap();
                 return true;
@@ -70,9 +77,9 @@ namespace ImageRotater.Services
             var image = target as Image;
 
             Brush brush;
-            if (IsFlash)
+            if (IsFlash(style))
             {
-                brush = new SolidColorBrush(FlashColor);
+                brush = new SolidColorBrush(FlashColor(style));
             }
             else
             {
@@ -105,7 +112,7 @@ namespace ImageRotater.Services
 
             try
             {
-                if (IsFlash)
+                if (IsFlash(style))
                 {
                     veil.Opacity = 0.0;
                     var up = new DoubleAnimation(1.0, new Duration(Half));

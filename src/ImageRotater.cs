@@ -83,7 +83,8 @@ namespace ImageRotater
             // which keeps it usable from the bulk conversion and the tests
             // without dragging the whole plugin along.
             GifConverter.ConfiguredPath = Settings?.FfmpegPath;
-            Transition.Style = Settings?.StillTransition ?? TransitionStyle.Crossfade;
+            Transition.CoverStyle = Settings?.CoverTransition ?? TransitionStyle.Crossfade;
+            Transition.BackgroundStyle = Settings?.BackgroundTransition ?? TransitionStyle.Crossfade;
 
             // A getter, not a snapshot: a settings save replaces the whole
             // object, so a captured one would leave YouTube downloads using
