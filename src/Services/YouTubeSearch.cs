@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -161,7 +161,7 @@ namespace ImageRotater.Services
         }
 
         // One JSON object per line, which is what --dump-json emits.
-        private static YouTubeVideo Parse(string line)
+        internal static YouTubeVideo Parse(string line)
         {
             try
             {

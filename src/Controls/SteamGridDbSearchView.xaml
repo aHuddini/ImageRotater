@@ -1,4 +1,4 @@
-<UserControl x:Class="ImageRotater.Controls.SteamGridDbSearchView"
+﻿<UserControl x:Class="ImageRotater.Controls.SteamGridDbSearchView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -313,9 +313,21 @@
                                                      A background loops, so a 20-second
                                                      clip reads very differently from a
                                                      ten-minute one - and it is the only
-                                                     hint before committing to a download. -->
+                                                     hint before committing to a download.
+
+                                                     Bottom LEFT. It was bottom-right,
+                                                     underneath the preview button, which
+                                                     is 26x26, opaque, in the same cell and
+                                                     declared after it - so a later sibling
+                                                     painted straight over it and the
+                                                     duration was never once visible. The
+                                                     button's own comment says it was put
+                                                     there to clear the ANIMATED badge and
+                                                     the tick; this badge arrived
+                                                     afterwards and took the last free
+                                                     corner it did not have. -->
                                                 <Border Visibility="{Binding IsYouTube, Converter={StaticResource BoolToVisibility}}"
-                                                        HorizontalAlignment="Right"
+                                                        HorizontalAlignment="Left"
                                                         VerticalAlignment="Bottom"
                                                         Margin="4"
                                                         Padding="4,1"
@@ -370,11 +382,15 @@
                                                  format matters because WPF cannot
                                                  display all of them - a WEBP will
                                                  not show here even though it
-                                                 downloads fine. -->
+                                                 downloads fine.
+
+                                                 CaptionText rather than Dimensions:
+                                                 a YouTube result has no size to state.
+                                                 See the property. -->
                                             <StackPanel Orientation="Horizontal"
                                                         HorizontalAlignment="Center"
                                                         Margin="0,4,0,0">
-                                                <TextBlock Text="{Binding Dimensions}"/>
+                                                <TextBlock Text="{Binding CaptionText}"/>
                                                 <TextBlock Text="{Binding FormatLabel}"
                                                            Margin="6,0,0,0"
                                                            Foreground="Gray"/>

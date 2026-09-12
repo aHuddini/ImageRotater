@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace ImageRotater.Models
 {
@@ -67,14 +67,52 @@ namespace ImageRotater.Models
         // video's poster frame, which is an ordinary JPEG.
         public bool IsYouTube { get; set; }
 
+        // The YouTube video id, kept because nothing else on this model can
+        // stand in for it. Id is an int the search assigns for the tile's sake,
+        // and Url is the watch PAGE -- which is HTML, not media, and is exactly
+        // what a <video> tag cannot play. The preview needs the id to build a
+        // player URL, so it is carried rather than parsed back out of a URL.
+        public string YouTubeId { get; set; }
+
         // Shown on the tile for video results - a background loops, so length
         // is the one thing worth knowing before downloading.
         public string DurationText { get; set; }
+
+        // Views, for the caption. Carried for the same reason the duration is:
+        // it is a fact about the video that the artwork model has no field for,
+        // and it is the only number on a YouTube result that differs between
+        // one result and the next.
+        public string ViewCountText { get; set; }
 
         // "1920x1080" - used as a filter value and shown in the UI.
         public string Dimensions
         {
             get { return Width + "x" + Height; }
+        }
+
+        // What the tile prints where a size would go.
+        //
+        // A YouTube result has no size to print. Width and Height are the
+        // POSTER's -- hqdefault.jpg is 480x360 for every video on the site, so
+        // every result carried the identical figure, and it described a
+        // thumbnail while appearing to describe the video. The real resolution
+        // is unknown until the file has been downloaded, and finding it out for
+        // two dozen search results means two dozen more yt-dlp calls.
+        //
+        // Views is the number that is both known and different per result, and
+        // it is what anyone actually sorts a soundtrack upload by. Length is on
+        // the thumbnail badge, so the two do not repeat each other.
+        public string CaptionText
+        {
+            get
+            {
+                if (!IsYouTube)
+                {
+                    return Dimensions;
+                }
+
+                return string.IsNullOrEmpty(ViewCountText) ? string.Empty : ViewCountText;
+            }
         }
 
         // True when the file actually moves.

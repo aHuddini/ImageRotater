@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -510,7 +510,16 @@ namespace ImageRotater.Controls
             PreviewPanel.Visibility = Visibility.Visible;
 
             PreviewTitle.Text = string.IsNullOrEmpty(item.Style) ? "Preview" : item.Style;
-            PreviewStatus.Text = item.Dimensions + "   " + item.FormatLabel;
+
+            // A YouTube result's Width and Height describe its THUMBNAIL -- the
+            // 480x360 poster frame -- because the video's real size is unknown
+            // until it has been downloaded. Printing that as the dimensions
+            // states a measurement of the wrong thing; the length is both known
+            // and the number that actually matters for a looping background.
+            PreviewStatus.Text = item.IsYouTube
+                ? (string.IsNullOrEmpty(item.DurationText)
+                    ? "YouTube" : "YouTube   " + item.DurationText)
+                : item.Dimensions + "   " + item.FormatLabel;
 
             if (!item.IsAnimated)
             {
@@ -551,6 +560,19 @@ namespace ImageRotater.Controls
             }
 
             PreviewImage.Visibility = Visibility.Collapsed;
+
+            /* YouTube is played by YouTube's own player and leaves here.
+
+               Its Url is a watch PAGE, and MotionPreviewUrl falls back to that
+               same page because there is no .webm thumbnail to prefer. Sending
+               it down the line below put an HTML document into a <video> tag,
+               which decodes nothing and draws an empty box -- the preview did
+               not fail, it succeeded at showing nothing. */
+            if (item.IsYouTube && !string.IsNullOrEmpty(item.YouTubeId))
+            {
+                _previewRenderer.ShowYouTube(item.YouTubeId);
+                return;
+            }
 
             // GIF and animated WebP are IMAGES to a browser; only real video
             // goes in a <video> tag.

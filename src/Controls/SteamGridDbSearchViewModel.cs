@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 // ObservableObject is declared in System.Collections.Generic inside
 // Playnite.SDK.dll, not in the Playnite.SDK namespace.
 using System.Collections.Generic;
@@ -241,16 +241,21 @@ namespace ImageRotater.Controls
                         Url = video.Url,
                         ThumbnailUrl = video.ThumbnailUrl,
 
-                        // hqdefault.jpg is always 480x360. The real video is
-                        // whatever it is until downloaded, but the filters need
-                        // numbers and these describe what the tile is showing.
+                        // hqdefault.jpg is always 480x360, and the real video is
+                        // whatever it is until downloaded. These are here for the
+                        // aspect filter, which needs numbers; the tile does NOT
+                        // print them, because the same figure on every result
+                        // describes the thumbnail while appearing to describe the
+                        // video. See SteamGridDbArtwork.CaptionText.
                         Width = 480,
                         Height = 360,
 
                         Style = video.Channel,
                         Mime = "video/mp4",
                         DurationText = video.DurationText,
+                        ViewCountText = video.ViewCountText,
                         IsYouTube = true,
+                        YouTubeId = video.Id,
 
                         // Named from a URL hash like a web result: a YouTube id
                         // is not a SteamGridDB id and cannot name a file.
