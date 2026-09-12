@@ -1,32 +1,50 @@
 # Theme integration
 
-ImageRotater needs no theme support for most things.
+ImageRotater needs no theme support for stills, and two elements for motion.
 
-**Backgrounds, and covers in details views, work everywhere.** The plugin writes
-Playnite's own `Game.BackgroundImage` / `Game.CoverImage`, and those views re-read
-the value when it changes. Nothing to add.
+**Stills work everywhere, untouched.** The plugin writes Playnite's own
+`Game.BackgroundImage` / `Game.CoverImage`; Playnite re-reads them in every
+view - Desktop always did, Fullscreen grid tiles since Playnite 10.57 - and the
+plugin draws the chosen transition (Covers → Animation, Backgrounds → Animation
+in its settings) over Playnite's own element. Nothing to add, nothing to bind.
 
-**Covers on Fullscreen grid tiles rotate too, with no theme support needed** —
-the plugin locates the tile and re-evaluates its cover binding itself. The
-section below records the underlying Playnite bug and what each attempted
-approach actually cost, for anyone maintaining this or attempting the same
-elsewhere.
+**GIF and video need a renderer Playnite does not have.** Playnite's `Image`
+shows a GIF's first frame and cannot decode video; its `FadeImage` background
+is the same `Image` twice. The plugin publishes a poster frame to the database
+so those elements always show *something*, and carries the real renderer - an
+`Image`, XamlAnimatedGif and a `MediaElement`, switched per pick - in two
+controls a theme hosts by name:
 
-**ANIMATED covers on Fullscreen grid tiles need one element from the theme**,
-and nothing else:
+| Where | Still | GIF / video |
+| --- | --- | --- |
+| Fullscreen grid tile | works, nothing to add | place `ImageRotater_Cover` in the tile template |
+| Details view cover (either mode) | works, nothing to add | place `ImageRotater_Cover` in the details template |
+| Background (either mode) | works, nothing to add | place `ImageRotater_Background` over your background |
 
-| | Fullscreen grid tile | Details view / Desktop | Background |
-| --- | --- | --- | --- |
-| Rotating between still covers | works, no theme support | works | works |
-| Animated GIF / video | place `ImageRotater_Cover` | works | works |
+**What a theme author has to do, in full:**
 
-Playnite's own tile renders `Game.CoverImage` through a WPF `Image`, which shows
-a GIF's first frame and cannot decode video at all, so animating one means a
-different renderer. The plugin's cover control IS that renderer - it carries an
-`Image`, XamlAnimatedGif and a `MediaElement`, and picks between them per pick.
-A theme hosts it; it does not need to build one.
+1. Add `<ContentControl x:Name="ImageRotater_Cover" .../>` as a sibling
+   *after* your own cover `Image`, wherever a cover is drawn that should be
+   able to animate. Leave your `Image` exactly as it is: the control is
+   transparent when it has nothing to draw, and draws the pick over it when
+   it does - stills included, with its own crossfade or flash.
+2. Add `<ContentControl x:Name="ImageRotater_Background" .../>` over your
+   background element, the same way.
+3. Nothing else. No `MediaElement`, no path bindings, no triggers, no
+   converters, no plugin-settings conditions. Video and GIF play through the
+   hosted control; stills keep coming through Playnite.
 
-See [Animated covers](#animated-covers-place-the-plugins-control).
+A theme built for BackgroundChanger is most of the way there: with "Work with
+themes built for BackgroundChanger" on, the plugin also answers to
+`BackgroundChanger_PluginCoverImage` and `BackgroundChanger_PluginBackgroundImage`.
+The elements resolve, but any *conditions* the theme wraps them in that check
+BackgroundChanger's own plugin status or settings stay false, so such a theme
+still needs an ImageRotater branch beside them - see
+[Themes built for BackgroundChanger](#themes-built-for-backgroundchanger).
+
+See [Animated covers](#animated-covers-place-the-plugins-control) for the
+markup and [Worked example: Aniki ReMake](#worked-example-aniki-remake) for a
+complete integration that is known to work.
 
 **Do not build a renderer in the theme.** It can be made to work - that has been
 demonstrated - but it duplicates one the plugin already has, and a second media

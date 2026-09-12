@@ -340,11 +340,22 @@ namespace ImageRotater
                 // only decode the same image twice.
             }
 
-            // Restart the slideshow clock for the new selection. Deliberately
-            // reset on every selection change: a slideshow interval measures
-            // "how long the user has been LOOKING at this game", not wall time.
+            // Restart the slideshow clock for a NEW selection: a slideshow
+            // interval measures "how long the user has been LOOKING at this
+            // game", not wall time.
+            //
+            // Only for a new one. Playnite re-raises this event for the game
+            // already selected - Fullscreen does it on view changes and focus
+            // shifts - and resetting on those restarted the clock mid-interval,
+            // so a change due in two seconds was pushed out to eight. That is
+            // the "slideshow timing is inconsistent" complaint.
+            bool changed = selected?.Id != _slideshowGame?.Id;
             _slideshowGame = selected;
-            ScheduleSlideshow();
+
+            if (changed || _slideshowTimer == null)
+            {
+                ScheduleSlideshow();
+            }
         }
 
         // Arms the per-kind due times and makes sure the timer only runs when
@@ -365,9 +376,16 @@ namespace ImageRotater
 
             bool wanted = _backgroundDue != DateTime.MaxValue || _coverDue != DateTime.MaxValue;
 
+            // Normal priority, not the default Background. A Background-priority
+            // tick waits until the dispatcher has nothing better to do, and a
+            // Fullscreen theme animating its backdrop and decoding a video
+            // cover always has something better to do - ticks landed late by
+            // a different amount each time, which read as the interval
+            // wandering.
             if (wanted && _slideshowTimer == null)
             {
-                _slideshowTimer = new System.Windows.Threading.DispatcherTimer();
+                _slideshowTimer = new System.Windows.Threading.DispatcherTimer(
+                    System.Windows.Threading.DispatcherPriority.Normal);
                 _slideshowTimer.Tick += OnSlideshowTick;
             }
 
@@ -1147,6 +1165,10 @@ namespace ImageRotater
             // transition in force; a new choice has to reach the instances
             // already on screen.
             FadeImageTuner.Apply();
+
+            // A changed interval - or a slideshow switched on - takes effect
+            // now, not at the next selection change.
+            ScheduleSlideshow();
         }
 
         // Removes every image the plugin holds and puts each game's own artwork
