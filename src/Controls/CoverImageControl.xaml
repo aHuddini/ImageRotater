@@ -52,6 +52,15 @@
                Visibility="Collapsed"
                IsHitTestVisible="False"/>
 
+        <!-- The flash for the fade-through-colour transitions: raised over
+             both still layers before the new picture is requested, lowered
+             once it has arrived. Sits below the video, which has its own
+             fades. See Transition. -->
+        <Rectangle x:Name="Veil"
+                   Opacity="0"
+                   Visibility="Collapsed"
+                   IsHitTestVisible="False"/>
+
         <!-- Video artwork, a renderer the Image cannot be: WPF's imaging stack
              does not decode containers. Only one of the two draws at a time.
 

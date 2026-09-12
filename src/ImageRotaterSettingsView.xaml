@@ -8,7 +8,7 @@
              d:DesignHeight="400" d:DesignWidth="600">
 
     <UserControl.Resources>
-        <controls:SelectionModeConverter x:Key="SelectionModeConverter"/>
+        <controls:EnumRadioConverter x:Key="EnumRadio"/>
     </UserControl.Resources>
 
     <!-- Tabbed on user request: backgrounds and covers are configured for
@@ -326,6 +326,34 @@
 
                     <Separator Margin="0,16"/>
 
+                    <TextBlock Text="Transition between still images"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4"/>
+                    <TextBlock Text="How a background or cover changes to the next still, in both Desktop and Fullscreen mode. Animated covers and videos keep their own fades."
+                               FontSize="11"
+                               Foreground="Gray"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+
+                    <RadioButton Content="Crossfade"
+                                 GroupName="StillTransition"
+                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Fade through black"
+                                 GroupName="StillTransition"
+                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughBlack}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Fade through white"
+                                 GroupName="StillTransition"
+                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=FadeThroughWhite}"
+                                 Margin="0,4"/>
+                    <RadioButton Content="Cut (no animation)"
+                                 GroupName="StillTransition"
+                                 IsChecked="{Binding Settings.StillTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Cut}"
+                                 Margin="0,4"/>
+
+                    <Separator Margin="0,16"/>
+
                     <CheckBox Content="Work with themes built for BackgroundChanger"
                               IsChecked="{Binding Settings.BackgroundChangerCompatibility}"
                               Margin="0,5"/>
@@ -392,7 +420,7 @@
 
                     <RadioButton Content="Pick once per session"
                                  GroupName="SelectionMode"
-                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource SelectionModeConverter}, ConverterParameter=Session}"
+                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Session}"
                                  Margin="0,4"/>
                     <TextBlock Text="Chooses an image the first time you see a game and keeps it until Playnite restarts. Artwork stays put while you browse."
                                FontSize="11"
@@ -402,7 +430,7 @@
 
                     <RadioButton Content="Pick again every time the game is selected"
                                  GroupName="SelectionMode"
-                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource SelectionModeConverter}, ConverterParameter=EverySelection}"
+                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=EverySelection}"
                                  Margin="0,4"/>
                     <TextBlock Text="A different image each time you land on a game. Backgrounds rotate as you leave a game, so the change is never visible mid-switch."
                                FontSize="11"
@@ -412,7 +440,7 @@
 
                     <RadioButton Content="Always use the same image"
                                  GroupName="SelectionMode"
-                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource SelectionModeConverter}, ConverterParameter=Fixed}"
+                                 IsChecked="{Binding Settings.SelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Fixed}"
                                  Margin="0,4"/>
                     <TextBlock Text="Always shows the first image alphabetically. No rotation at all."
                                FontSize="11"
@@ -481,7 +509,7 @@
 
                     <RadioButton Content="Pick once per session (changes on Playnite startup)"
                                  GroupName="CoverSelectionMode"
-                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource SelectionModeConverter}, ConverterParameter=Session}"
+                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Session}"
                                  Margin="0,4"/>
                     <TextBlock Text="A fresh cover per Playnite launch. The grid stays calm while you browse."
                                FontSize="11"
@@ -491,7 +519,7 @@
 
                     <RadioButton Content="Pick again every time the game is selected"
                                  GroupName="CoverSelectionMode"
-                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource SelectionModeConverter}, ConverterParameter=EverySelection}"
+                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=EverySelection}"
                                  Margin="0,4"/>
                     <TextBlock Text="The tile changes each time you land on the game. Lively, but the grid reshuffles as you navigate."
                                FontSize="11"
@@ -501,7 +529,7 @@
 
                     <RadioButton Content="Always use the same image"
                                  GroupName="CoverSelectionMode"
-                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource SelectionModeConverter}, ConverterParameter=Fixed}"
+                                 IsChecked="{Binding Settings.CoverSelectionMode, Converter={StaticResource EnumRadio}, ConverterParameter=Fixed}"
                                  Margin="0,4"/>
                     <TextBlock Text="Always shows the first image alphabetically. No rotation at all."
                                FontSize="11"

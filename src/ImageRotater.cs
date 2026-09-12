@@ -83,6 +83,7 @@ namespace ImageRotater
             // which keeps it usable from the bulk conversion and the tests
             // without dragging the whole plugin along.
             GifConverter.ConfiguredPath = Settings?.FfmpegPath;
+            Transition.Style = Settings?.StillTransition ?? TransitionStyle.Crossfade;
 
             // A getter, not a snapshot: a settings save replaces the whole
             // object, so a captured one would leave YouTube downloads using
@@ -1140,6 +1141,11 @@ namespace ImageRotater
         public void NotifySettingsSaved()
         {
             _rotationService?.ForgetAll();
+
+            // Playnite's background control is tuned per instance to the
+            // transition in force; a new choice has to reach the instances
+            // already on screen.
+            FadeImageTuner.Apply();
         }
 
         // Removes every image the plugin holds and puts each game's own artwork

@@ -551,7 +551,8 @@ namespace ImageRotater.Controls
         {
             try
             {
-                if (DisplayImage.Source == null || DisplayImage.Visibility != Visibility.Visible)
+                if (Transition.Style == TransitionStyle.Cut ||
+                    DisplayImage.Source == null || DisplayImage.Visibility != Visibility.Visible)
                 {
                     ClearPreviousCover();
                     return;
@@ -561,6 +562,19 @@ namespace ImageRotater.Controls
                 PreviousImage.Opacity = 1.0;
                 PreviousImage.Visibility = Visibility.Visible;
 
+                // A flash goes up NOW, over the old picture, so it is full by
+                // the time the new one lands underneath it. The old layer is
+                // still staged: the picture can arrive before the veil is
+                // opaque, and must not show through early.
+                if (Transition.IsFlash)
+                {
+                    Veil.Fill = new System.Windows.Media.SolidColorBrush(Transition.FlashColor);
+                    Veil.Visibility = Visibility.Visible;
+                    Veil.BeginAnimation(
+                        OpacityProperty,
+                        new System.Windows.Media.Animation.DoubleAnimation(
+                            1.0, new Duration(Transition.Half)));
+                }
             }
             catch (Exception ex)
             {
@@ -684,6 +698,30 @@ namespace ImageRotater.Controls
         {
             try
             {
+                // Under a flash there is nothing to dissolve: the new picture
+                // is already whole beneath the veil, so the old layer goes at
+                // once and the veil comes down over it.
+                if (Veil.Visibility == Visibility.Visible)
+                {
+                    _replacingVideo = false;
+                    ClearPreviousCover();
+
+                    int veilGeneration = ++_fadeGeneration;
+                    var lower = new System.Windows.Media.Animation.DoubleAnimation(
+                        0.0, new Duration(Transition.Half));
+
+                    lower.Completed += (s, e) =>
+                    {
+                        if (veilGeneration == _fadeGeneration)
+                        {
+                            LowerVeil();
+                        }
+                    };
+
+                    Veil.BeginAnimation(OpacityProperty, lower);
+                    return;
+                }
+
                 if (PreviousImage.Source == null ||
                     PreviousImage.Visibility != Visibility.Visible)
                 {
@@ -698,7 +736,7 @@ namespace ImageRotater.Controls
                         DisplayImage.BeginAnimation(
                             OpacityProperty,
                             new System.Windows.Media.Animation.DoubleAnimation(
-                                0.0, 1.0, new Duration(CoverFadeDuration)));
+                                0.0, 1.0, new Duration(Transition.Duration)));
                     }
 
                     return;
@@ -707,7 +745,7 @@ namespace ImageRotater.Controls
                 _replacingVideo = false;
 
                 var fade = new System.Windows.Media.Animation.DoubleAnimation(
-                    1.0, 0.0, new Duration(CoverFadeDuration));
+                    1.0, 0.0, new Duration(Transition.Duration));
 
                 // Completed fires even for a REPLACED animation, so without a
                 // generation an older fade tears down the layer a newer one is
@@ -739,16 +777,18 @@ namespace ImageRotater.Controls
             PreviousImage.Source = null;
         }
 
+        private void LowerVeil()
+        {
+            Veil.BeginAnimation(OpacityProperty, null);
+            Veil.Opacity = 0.0;
+            Veil.Visibility = Visibility.Collapsed;
+        }
+
         private int _fadeGeneration;
 
         // True while the still now arriving is replacing a video, so the fade
         // runs on the incoming image - there is no outgoing layer to dissolve.
         private bool _replacingVideo;
-
-        // Matched to what Playnite's own FadeImage uses for backgrounds, so a
-        // cover and a background switch at the same pace.
-        private static readonly TimeSpan CoverFadeDuration =
-            TimeSpan.FromMilliseconds(300);
 
         // Hands a video to the MediaElement and stands the Image down, so
         // exactly one renderer draws.
@@ -898,7 +938,7 @@ namespace ImageRotater.Controls
             DisplayVideo.BeginAnimation(
                 OpacityProperty,
                 new System.Windows.Media.Animation.DoubleAnimation(
-                    0.0, 1.0, new Duration(CoverFadeDuration)));
+                    0.0, 1.0, new Duration(Transition.Duration)));
 
             if (!_startAtRandomPoint)
             {

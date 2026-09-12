@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using ImageRotater.Services;
 using Newtonsoft.Json;
 using Playnite.SDK;
 
@@ -376,6 +377,16 @@ namespace ImageRotater
             set { selectionMode = value; OnPropertyChanged(); }
         }
 
+        // How one still replaces another - backgrounds and covers, Desktop
+        // and Fullscreen alike. Read by the renderers through Transition.
+        private TransitionStyle stillTransition = TransitionStyle.Crossfade;
+
+        public TransitionStyle StillTransition
+        {
+            get => stillTransition;
+            set { stillTransition = value; OnPropertyChanged(); }
+        }
+
         public bool EnableDebugLogging
         {
             get => enableDebugLogging;
@@ -740,6 +751,7 @@ namespace ImageRotater
             // a user who just pointed the plugin at ffmpeg would have to
             // restart Playnite before anything used it.
             Services.GifConverter.ConfiguredPath = Settings?.FfmpegPath;
+            Transition.Style = Settings?.StillTransition ?? TransitionStyle.Crossfade;
 
             // Toggled settings apply on the next selection, not whenever each
             // game happens to rotate again.

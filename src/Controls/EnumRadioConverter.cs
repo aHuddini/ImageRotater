@@ -4,10 +4,10 @@ using System.Windows.Data;
 
 namespace ImageRotater.Controls
 {
-    // Binds a group of RadioButtons to a single SelectionMode property.
-    // Each button passes its own mode name as ConverterParameter and is checked
-    // only when the setting equals it.
-    public class SelectionModeConverter : IValueConverter
+    // Binds a group of RadioButtons to a single enum property - SelectionMode,
+    // TransitionStyle, any other. Each button passes its own value's name as
+    // ConverterParameter and is checked only when the setting equals it.
+    public class EnumRadioConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
@@ -30,13 +30,14 @@ namespace ImageRotater.Controls
                 return Binding.DoNothing;
             }
 
-            SelectionMode mode;
-            if (Enum.TryParse(parameter.ToString(), true, out mode))
+            try
             {
-                return mode;
+                return Enum.Parse(targetType, parameter.ToString(), true);
             }
-
-            return Binding.DoNothing;
+            catch (Exception)
+            {
+                return Binding.DoNothing;
+            }
         }
     }
 }

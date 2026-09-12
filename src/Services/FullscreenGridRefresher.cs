@@ -7,17 +7,14 @@ using Playnite.SDK;
 
 namespace ImageRotater.Services
 {
-    // Fades Playnite's own cover tile through a slideshow swap.
+    // Transitions Playnite's own cover tile through a slideshow swap.
     //
     // A slideshow tick changes Game.CoverImage while the same game stays
     // selected. Playnite notifies the tile and it snaps to the new picture -
     // correct, but a hard cut every few seconds is not what a slideshow
-    // should look like. This dims the tile, runs the swap behind opacity 0,
-    // and brings it back up, so the change reads as a dissolve.
-    //
-    // Animating Playnite's own Image from the plugin needs no theme support
-    // and injects nothing into the tile's tree: opacity is not set by the
-    // tile's template, so the animation fights nothing.
+    // should look like. The swap runs behind the configured transition (see
+    // Transition), drawn over the tile in the adorner layer, so nothing is
+    // injected into the tile's tree and no theme support is needed.
     //
     // This class used to also force tiles to re-read their binding, because
     // Playnite 10.56 and earlier never notified FullscreenListItemCoverObject
@@ -137,8 +134,30 @@ namespace ImageRotater.Services
                 return;
             }
 
+            // The configured transition, drawn in the adorner layer over
+            // Playnite's Image. A theme whose window template dropped its
+            // AdornerDecorator leaves no layer to draw in; then the tile dips
+            // through its own backdrop instead, which needs nothing.
+            try
+            {
+                if (Transition.Run(cover, () => RunSwapSafely(swap)))
+                {
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "ImageRotater: cover transition failed, dipping instead");
+            }
+
+            DipSwap(cover, swap);
+        }
+
+        // Fades the tile out, swaps behind opacity 0, fades it back in.
+        private static void DipSwap(Image cover, Action swap)
+        {
             var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
-                1.0, 0.0, new Duration(TimeSpan.FromMilliseconds(180)));
+                1.0, 0.0, new Duration(Transition.Half));
 
             fadeOut.Completed += (s, e) =>
             {
@@ -149,7 +168,7 @@ namespace ImageRotater.Services
                     RunSwapSafely(swap);
 
                     var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(
-                        0.0, 1.0, new Duration(TimeSpan.FromMilliseconds(240)));
+                        0.0, 1.0, new Duration(Transition.Half));
 
                     fadeIn.Completed += (s2, e2) =>
                     {
