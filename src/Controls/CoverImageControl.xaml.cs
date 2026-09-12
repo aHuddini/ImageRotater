@@ -258,7 +258,7 @@ namespace ImageRotater.Controls
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             _animating = false;
 
-            StagePreviousCover();
+            StagePreviousCover(path);
             _data.ImagePath = path;
 
             DisplayImage.Visibility = Visibility.Visible;
@@ -451,6 +451,7 @@ namespace ImageRotater.Controls
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, new Uri(path));
                     _data.ImagePath = string.Empty;
                     _animating = true;
+                    LowerVeil();
                 }
                 else
                 {
@@ -467,7 +468,7 @@ namespace ImageRotater.Controls
                     // Fullscreen tile's layout pass is what took Playnite down
                     // before, so the fix has to work with the delay rather than
                     // remove it.
-                    StagePreviousCover();
+                    StagePreviousCover(path);
                     _data.ImagePath = path;
                     _animating = false;
 
@@ -526,6 +527,7 @@ namespace ImageRotater.Controls
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
             ClearPreviousCover();
+            LowerVeil();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
         }
@@ -536,6 +538,7 @@ namespace ImageRotater.Controls
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
             StopVideo();
             ClearPreviousCover();
+            LowerVeil();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Visible;
         }
@@ -547,10 +550,23 @@ namespace ImageRotater.Controls
         // is a plain Image rather than a FadeImage, so unlike backgrounds there
         // is no theme transition to defer to - the plugin has to do this or the
         // switch is a hard cut.
-        private void StagePreviousCover()
+        //
+        // Nothing is staged when the path is not actually changing. Refresh
+        // runs on every selection announcement and usually resolves the same
+        // published pick; the data context drops an unchanged path without a
+        // notification, so no picture arrives and no TargetUpdated fires to
+        // finish what was started here. A staged copy of the same cover was
+        // invisible; a veil raised for it stayed up - the tile went black on
+        // selection and only recovered at the next slideshow tick.
+        private void StagePreviousCover(string incomingPath)
         {
             try
             {
+                if (string.Equals(incomingPath, _data.ImagePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
                 if (Transition.Style == TransitionStyle.Cut ||
                     DisplayImage.Source == null || DisplayImage.Visibility != Visibility.Visible)
                 {
@@ -566,14 +582,43 @@ namespace ImageRotater.Controls
                 // the time the new one lands underneath it. The old layer is
                 // still staged: the picture can arrive before the veil is
                 // opaque, and must not show through early.
+                //
+                // And it usually does arrive first - a cached cover decodes in
+                // a few milliseconds. The lowering therefore waits for the
+                // raise to finish (see CrossfadePreviousCover), or the veil
+                // would turn round at a tenth of its height and no flash
+                // would ever be seen.
                 if (Transition.IsFlash)
                 {
                     Veil.Fill = new System.Windows.Media.SolidColorBrush(Transition.FlashColor);
                     Veil.Visibility = Visibility.Visible;
-                    Veil.BeginAnimation(
-                        OpacityProperty,
-                        new System.Windows.Media.Animation.DoubleAnimation(
-                            1.0, new Duration(Transition.Half)));
+
+                    int raise = ++_veilRaiseGeneration;
+                    _veilRising = true;
+                    _veilLowerPending = false;
+
+                    var up = new System.Windows.Media.Animation.DoubleAnimation(
+                        1.0, new Duration(Transition.Half));
+
+                    // Completed fires for a replaced animation too, so a raise
+                    // superseded by a newer one must not report that one done.
+                    up.Completed += (s, e) =>
+                    {
+                        if (raise != _veilRaiseGeneration)
+                        {
+                            return;
+                        }
+
+                        _veilRising = false;
+
+                        if (_veilLowerPending)
+                        {
+                            _veilLowerPending = false;
+                            DropVeil();
+                        }
+                    };
+
+                    Veil.BeginAnimation(OpacityProperty, up);
                 }
             }
             catch (Exception ex)
@@ -700,25 +745,20 @@ namespace ImageRotater.Controls
             {
                 // Under a flash there is nothing to dissolve: the new picture
                 // is already whole beneath the veil, so the old layer goes at
-                // once and the veil comes down over it.
+                // once and the veil comes down over it - once it is fully up.
                 if (Veil.Visibility == Visibility.Visible)
                 {
                     _replacingVideo = false;
-                    ClearPreviousCover();
 
-                    int veilGeneration = ++_fadeGeneration;
-                    var lower = new System.Windows.Media.Animation.DoubleAnimation(
-                        0.0, new Duration(Transition.Half));
-
-                    lower.Completed += (s, e) =>
+                    if (_veilRising)
                     {
-                        if (veilGeneration == _fadeGeneration)
-                        {
-                            LowerVeil();
-                        }
-                    };
+                        _veilLowerPending = true;
+                    }
+                    else
+                    {
+                        DropVeil();
+                    }
 
-                    Veil.BeginAnimation(OpacityProperty, lower);
                     return;
                 }
 
@@ -777,12 +817,40 @@ namespace ImageRotater.Controls
             PreviousImage.Source = null;
         }
 
+        // The veil is opaque and the new picture is whole beneath it: swap
+        // the layers out and bring the veil down over the result.
+        private void DropVeil()
+        {
+            ClearPreviousCover();
+
+            int veilGeneration = ++_fadeGeneration;
+            var lower = new System.Windows.Media.Animation.DoubleAnimation(
+                0.0, new Duration(Transition.Half));
+
+            lower.Completed += (s, e) =>
+            {
+                if (veilGeneration == _fadeGeneration)
+                {
+                    LowerVeil();
+                }
+            };
+
+            Veil.BeginAnimation(OpacityProperty, lower);
+        }
+
+        // Hard reset: no animation, no pending work.
         private void LowerVeil()
         {
+            _veilRising = false;
+            _veilLowerPending = false;
             Veil.BeginAnimation(OpacityProperty, null);
             Veil.Opacity = 0.0;
             Veil.Visibility = Visibility.Collapsed;
         }
+
+        private int _veilRaiseGeneration;
+        private bool _veilRising;
+        private bool _veilLowerPending;
 
         private int _fadeGeneration;
 
@@ -796,6 +864,7 @@ namespace ImageRotater.Controls
         {
             _data.ImagePath = string.Empty;
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
+            LowerVeil();
             DisplayImage.Visibility = Visibility.Collapsed;
             MissingImagePlaceholder.Visibility = Visibility.Collapsed;
 

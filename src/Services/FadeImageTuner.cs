@@ -77,6 +77,7 @@ namespace ImageRotater.Services
             public Image Image1;
             public Image Image2;
             public DependencyPropertyDescriptor SourceDescriptor;
+            public object LastSource;
             public EventHandler OnSourceChanged;
             public EventHandler OnSwap;
             public RoutedEventHandler OnUnloaded;
@@ -381,7 +382,22 @@ namespace ImageRotater.Services
             tune.Backstop = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
             tune.Backstop.Tick += (s, e) => Lower(tune);
 
-            tune.OnSourceChanged = (s, e) => Raise(tune);
+            // Raised only for a source FadeImage will actually load. Themes
+            // hand it a fresh BitmapLoadProperties on every notification, and
+            // it compares those by VALUE and skips an equal one - a veil
+            // raised for that would sit up until the backstop.
+            tune.LastSource = fadeImage.GetValue(sourceDp);
+            tune.OnSourceChanged = (s, e) =>
+            {
+                object source = fadeImage.GetValue(sourceDp);
+                if (source == null || Equals(source, tune.LastSource))
+                {
+                    return;
+                }
+
+                tune.LastSource = source;
+                Raise(tune);
+            };
             tune.SourceDescriptor = DependencyPropertyDescriptor.FromProperty(sourceDp, fadeImage.GetType());
             tune.SourceDescriptor.AddValueChanged(fadeImage, tune.OnSourceChanged);
 
