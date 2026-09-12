@@ -18,24 +18,28 @@
       settings window.
     -->
 
-    <!-- Palette. Same slate and cyan as UniPlaySong, so the two plugins read as one family. -->
-    <SolidColorBrush x:Key="IrGround"     Color="#12171E"/>
-    <SolidColorBrush x:Key="IrSurface"    Color="#1A222C"/>
-    <SolidColorBrush x:Key="IrSurfaceHi"  Color="#232D3A"/>
-    <SolidColorBrush x:Key="IrStroke"     Color="#31404F"/>
-    <SolidColorBrush x:Key="IrStrokeHi"   Color="#4A5F73"/>
-    <SolidColorBrush x:Key="IrAccent"     Color="#4CC2FF"/>
-    <SolidColorBrush x:Key="IrText"       Color="#E4E9EF"/>
-    <SolidColorBrush x:Key="IrTextMuted"  Color="#93A1B0"/>
-    <SolidColorBrush x:Key="IrWarn"       Color="#C8A24B"/>
-    <SolidColorBrush x:Key="IrDanger"     Color="#E08070"/>
+    <!-- Palette. The same construction as UniPlaySong's page - ground, surface, stroke,
+         accent, two text weights - but its own colours: a deep indigo ground with a lavender
+         accent, where UniPlaySong is slate and cyan and SuperScroll slate and mint. The three
+         share a language, not a coat of paint. Warn and danger stay amber and red, because
+         those mean the same thing everywhere. -->
+    <SolidColorBrush x:Key="IrGround"     Color="#14121C"/>
+    <SolidColorBrush x:Key="IrSurface"    Color="#1C1926"/>
+    <SolidColorBrush x:Key="IrSurfaceHi"  Color="#27222F"/>
+    <SolidColorBrush x:Key="IrStroke"     Color="#3A3448"/>
+    <SolidColorBrush x:Key="IrStrokeHi"   Color="#5A5070"/>
+    <SolidColorBrush x:Key="IrAccent"     Color="#B48CFF"/>
+    <SolidColorBrush x:Key="IrText"       Color="#ECE8F2"/>
+    <SolidColorBrush x:Key="IrTextMuted"  Color="#A39BB2"/>
+    <SolidColorBrush x:Key="IrWarn"       Color="#D9A441"/>
+    <SolidColorBrush x:Key="IrDanger"     Color="#E07A6E"/>
 
     <!-- The page ground is a slow diagonal rather than a flat fill: a flat ground gives a
          translucent card nothing to sit on. The range is tiny on purpose. -->
     <LinearGradientBrush x:Key="IrGroundGlass" StartPoint="0,0" EndPoint="0.85,1">
-        <GradientStop Offset="0"   Color="#1A212B"/>
-        <GradientStop Offset="0.5" Color="#161C25"/>
-        <GradientStop Offset="1"   Color="#131922"/>
+        <GradientStop Offset="0"   Color="#1D1928"/>
+        <GradientStop Offset="0.5" Color="#181521"/>
+        <GradientStop Offset="1"   Color="#14121B"/>
     </LinearGradientBrush>
 
     <!-- ============================== Page shell ============================== -->
@@ -140,8 +144,8 @@
     <!-- Smoked glass laid on the ground, with a bevelled edge lit top-left. The alpha stays near
          0xE6 so the ground's diagonal still shows through. -->
     <LinearGradientBrush x:Key="IrGlassNeutral" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Offset="0" Color="#E6161D28"/>
-        <GradientStop Offset="1" Color="#E60B0F16"/>
+        <GradientStop Offset="0" Color="#E61A1725"/>
+        <GradientStop Offset="1" Color="#E60D0B13"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrGlassWarn" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Offset="0" Color="#E61E180D"/>
@@ -153,10 +157,10 @@
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="IrBevelNeutral" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Offset="0"    Color="#93A6B8"/>
-        <GradientStop Offset="0.12" Color="#63768A"/>
-        <GradientStop Offset="0.55" Color="#3A4757"/>
-        <GradientStop Offset="1"    Color="#1E262F"/>
+        <GradientStop Offset="0"    Color="#A497BE"/>
+        <GradientStop Offset="0.12" Color="#736690"/>
+        <GradientStop Offset="0.55" Color="#443C58"/>
+        <GradientStop Offset="1"    Color="#221E2C"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrBevelWarn" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Offset="0"    Color="#E0BC70"/>
@@ -235,17 +239,17 @@
         <GradientStop Offset="1"    Color="#94A3B2"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrGrooveOff" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Offset="0"    Color="#0F151C"/>
-        <GradientStop Offset="0.55" Color="#1E2733"/>
-        <GradientStop Offset="1"    Color="#2C3843"/>
+        <GradientStop Offset="0"    Color="#100E17"/>
+        <GradientStop Offset="0.55" Color="#221E2D"/>
+        <GradientStop Offset="1"    Color="#302B3D"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrGrooveOn" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Offset="0"    Color="#154759"/>
-        <GradientStop Offset="0.55" Color="#1E7391"/>
-        <GradientStop Offset="1"    Color="#3BACD1"/>
+        <GradientStop Offset="0"    Color="#3A2A66"/>
+        <GradientStop Offset="0.55" Color="#5E42A6"/>
+        <GradientStop Offset="1"    Color="#9070DE"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="IrOnRim" Color="#1F5F76"/>
-    <SolidColorBrush x:Key="IrLedOn" Color="#A7E8FF"/>
+    <SolidColorBrush x:Key="IrOnRim" Color="#4E3C82"/>
+    <SolidColorBrush x:Key="IrLedOn" Color="#EADCFF"/>
     <LinearGradientBrush x:Key="IrLipSheen" StartPoint="0,0" EndPoint="1,0">
         <GradientStop Offset="0"   Color="#00FFFFFF"/>
         <GradientStop Offset="0.5" Color="#62FFFFFF"/>
@@ -258,12 +262,12 @@
     </LinearGradientBrush>
     <!-- Sub-option on state: deep blue beside the cyan parent, a stop or two quieter. -->
     <LinearGradientBrush x:Key="IrGrooveOnSub" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Offset="0"    Color="#16273F"/>
-        <GradientStop Offset="0.55" Color="#22406B"/>
-        <GradientStop Offset="1"    Color="#3A63A0"/>
+        <GradientStop Offset="0"    Color="#3C2440"/>
+        <GradientStop Offset="0.55" Color="#5E3864"/>
+        <GradientStop Offset="1"    Color="#8A5A92"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="IrOnRimSub" Color="#1E355C"/>
-    <SolidColorBrush x:Key="IrLedOnSub" Color="#A8C6F0"/>
+    <SolidColorBrush x:Key="IrOnRimSub" Color="#4E2F54"/>
+    <SolidColorBrush x:Key="IrLedOnSub" Color="#F0C8F4"/>
 
     <Style x:Key="IrToggle" TargetType="CheckBox">
         <Setter Property="Foreground" Value="{StaticResource IrText}"/>
@@ -336,7 +340,7 @@
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Thumb" Property="Background" Value="{StaticResource IrKnobFaceHover}"/>
-                            <Setter TargetName="Thumb" Property="BorderBrush" Value="#A9BAC9"/>
+                            <Setter TargetName="Thumb" Property="BorderBrush" Value="#B7ABCC"/>
                             <Setter TargetName="Lip" Property="Background" Value="{StaticResource IrLipSheenHover}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -362,14 +366,14 @@
     <!-- Circular where the toggle is square: the shape is the affordance. Same construction -
          recessed well, bevelled rim, a lit dot when selected. -->
     <LinearGradientBrush x:Key="IrWellFace" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Offset="0"   Color="#0E141A"/>
-        <GradientStop Offset="0.6" Color="#1B232E"/>
-        <GradientStop Offset="1"   Color="#28323D"/>
+        <GradientStop Offset="0"   Color="#0F0D15"/>
+        <GradientStop Offset="0.6" Color="#1E1A28"/>
+        <GradientStop Offset="1"   Color="#2C2738"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrWellRim" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Offset="0"   Color="#5A6A7A"/>
-        <GradientStop Offset="0.5" Color="#2C3743"/>
-        <GradientStop Offset="1"   Color="#141A21"/>
+        <GradientStop Offset="0"   Color="#6A5F80"/>
+        <GradientStop Offset="0.5" Color="#332D42"/>
+        <GradientStop Offset="1"   Color="#16131E"/>
     </LinearGradientBrush>
 
     <Style x:Key="IrRadio" TargetType="RadioButton">
@@ -399,7 +403,7 @@
                             <Setter TargetName="Dot" Property="Opacity" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Well" Property="Stroke" Value="#8CA0B4"/>
+                            <Setter TargetName="Well" Property="Stroke" Value="#9C8FB8"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Well" Property="Opacity" Value="0.35"/>
@@ -526,17 +530,17 @@
 
     <!-- The same bevelled panel as the cards, at control scale. Pressed inverts the bevel. -->
     <LinearGradientBrush x:Key="IrButtonFace" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Offset="0" Color="#2B3644"/>
-        <GradientStop Offset="1" Color="#1D2530"/>
+        <GradientStop Offset="0" Color="#332C46"/>
+        <GradientStop Offset="1" Color="#221D30"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrButtonFaceHover" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Offset="0" Color="#384656"/>
-        <GradientStop Offset="1" Color="#26303C"/>
+        <GradientStop Offset="0" Color="#423959"/>
+        <GradientStop Offset="1" Color="#2B2539"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrButtonRim" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Offset="0"   Color="#7C8EA0"/>
-        <GradientStop Offset="0.5" Color="#3C4959"/>
-        <GradientStop Offset="1"   Color="#212934"/>
+        <GradientStop Offset="0"   Color="#9385B0"/>
+        <GradientStop Offset="0.5" Color="#483F60"/>
+        <GradientStop Offset="1"   Color="#262133"/>
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="IrButtonDangerFace" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Offset="0" Color="#6A2E2C"/>

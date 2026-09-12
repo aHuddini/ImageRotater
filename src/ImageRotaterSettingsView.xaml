@@ -331,13 +331,18 @@
                     <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,4,0,12"
                                Text="Lossless, so no further quality is lost each time an image is processed - but the files get considerably larger. Quality already lost to JPEG does not come back."/>
 
-                    <Button Style="{StaticResource IrButton}" Content="Repair videos (fix black tiles)"
-                            Command="{Binding RepairVideos}"/>
-                    <TextBlock Style="{StaticResource IrHintFlush}" Margin="0,4,0,12"
-                               Text="Videos downloaded in a fragmented format show as solid black even though nothing reports an error. This rewrites just the container - no quality loss, healthy videos untouched. Also available per game from the right-click menu. Needs ffmpeg."/>
-
                     <Border Style="{StaticResource IrSectionBar}">
                         <TextBlock Text="REPAIR" Style="{StaticResource IrSectionTitle}"/>
+                    </Border>
+
+                    <Border Style="{StaticResource IrCard}">
+                        <StackPanel>
+                            <TextBlock Text="Repair videos" Style="{StaticResource IrCardTitle}"/>
+                            <TextBlock Style="{StaticResource IrHintFlush}"
+                                       Text="Videos downloaded in a fragmented format show as solid black tiles even though nothing reports an error. This rewrites just the container - no quality loss, healthy videos untouched. Also available per game from the right-click menu. Needs ffmpeg."/>
+                            <Button Style="{StaticResource IrButton}" Content="Repair videos (fix black tiles)"
+                                    Command="{Binding RepairVideos}"/>
+                        </StackPanel>
                     </Border>
 
                     <Border Style="{StaticResource IrCard}">
