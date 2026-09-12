@@ -101,11 +101,22 @@ namespace ImageRotater.Controls
         {
             ArtworkRotated -= OnArtworkRotated;
 
-            // Release the path so a recycled tile does not briefly show the
-            // previous game's cover. The binding owns the bitmap's lifetime.
-            // The GIF behaviour is released too - an unloaded tile must not
-            // keep an animation decoding frames forever.
-            _data.ImagePath = string.Empty;
+            // The path is NOT cleared here, and that is the Fullscreen fix.
+            //
+            // Selecting a tile unloads and reloads it (see below). Clearing
+            // the path handed the async binding a null, which it delivered
+            // AFTER the reload's refresh had re-set the same path and started
+            // a transition: TargetUpdated fired for an empty image, the
+            // transition took that as the new picture arriving and finished -
+            // veil down, old layer gone - over nothing, so Playnite's tile
+            // underneath showed the whole new cover with no transition at all,
+            // and then ours landed and popped. Desktop never unloads on
+            // selection, which is why only Fullscreen ever showed it.
+            //
+            // A recycle gets GameContextChanged, which re-picks; a genuine
+            // teardown drops the control and its bitmap with it. The GIF
+            // behaviour is released - an unloaded tile must not keep an
+            // animation decoding frames forever.
             XamlAnimatedGif.AnimationBehavior.SetSourceUri(DisplayImage, null);
 
             // Video is released LATER, and only if this really was a teardown.
@@ -148,9 +159,22 @@ namespace ImageRotater.Controls
             // to route through a helper that remembers.
             StopVideo();
 
+            // A cut, never a transition: this tile IS a different game now,
+            // and Playnite's own tile cuts too. Without this every tile that
+            // scrolled into view dissolved - or flashed - from whichever game
+            // it last showed.
+            ClearPreviousCover();
+            LowerVeil();
+            _cutNextStage = true;
+
             _previousPick = null;
             Refresh();
         }
+
+        // Set by a context change and consumed by the next StagePreviousCover:
+        // the picture on screen belongs to another game and must not be the
+        // outgoing layer of a transition.
+        private bool _cutNextStage;
 
         // A slideshow tick rotates artwork while the SAME game stays selected,
         // so Playnite raises no context change and nothing above would ever
@@ -562,6 +586,13 @@ namespace ImageRotater.Controls
         {
             try
             {
+                if (_cutNextStage)
+                {
+                    _cutNextStage = false;
+                    ClearPreviousCover();
+                    return;
+                }
+
                 if (string.Equals(incomingPath, _data.ImagePath, StringComparison.OrdinalIgnoreCase))
                 {
                     return;
@@ -636,6 +667,13 @@ namespace ImageRotater.Controls
         private void DisplayImage_TargetUpdated(
             object sender, System.Windows.Data.DataTransferEventArgs e)
         {
+            // A null delivery - the path was cleared - is not a picture
+            // arriving, and must not finish a transition that is waiting for
+            // one. The paths that clear the image tear their own layers down.
+            if (DisplayImage.Source == null)
+            {
+                return;
+            }
 
             // The GIF behaviour owns Image.Source while attached, and a still
             // arriving means it is time to let go.
