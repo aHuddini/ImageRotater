@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="assets/banner.png" alt="ImageRotater — rotating artwork for Playnite: stills, GIF and video" width="720">
+  <img src="assets/banner.png" alt="ImageRotater — rotating artwork for Playnite" width="720">
 </p>
 
 <p align="center">
-  Rotating artwork for <a href="https://playnite.link/">Playnite</a> — stills, GIF and video, in Desktop and Fullscreen.
+  Rotating artwork for <a href="https://playnite.link/">Playnite</a>. Give a game more than one cover or background and watch them change.
 </p>
 
 <p align="center">
@@ -29,146 +29,123 @@
   </a>
 </p>
 
-Give a game more than one background or cover and ImageRotater shows a different one each time you
-look — or cycles through them while you linger. Stills work in every theme with nothing to add;
-animated GIF and MP4 covers and backgrounds play wherever a theme hosts the plugin's one-line
-element.
+A library that never looks the same twice. ImageRotater keeps a collection of covers and
+backgrounds for each game and shows a different one every time you visit — or cycles through them
+while you linger. Bring in animated GIFs and video and your covers move.
 
-## What's New — v1.0.0
+## Highlights
 
-- **Playnite 10.57 support.** Fullscreen grid covers now rotate through Playnite's own tile — the
-  one-line fix that makes it possible was
-  [submitted from this project](docs/THEME_INTEGRATION.md#the-fullscreen-grid-cover-problem-fixed-in-playnite-1057)
-  and the plugin-side workarounds are gone.
-- **Transitions.** Crossfade, fade through black, fade through white, or cut — chosen separately for
-  covers and backgrounds, applied identically in Desktop and Fullscreen.
-- **Four artwork sources.** Steam's own store art and trailers, SteamGridDB, web image search, and
-  YouTube (saved as MP4), all from one search dialog with a live preview.
-- **Library tools.** Bulk-convert GIFs to MP4 and JPEGs to PNG, repair videos that render as black
-  tiles, repair dangling artwork references, or reset everything back to the original art.
-- **New settings page.**
+- **Backgrounds and covers rotate on their own.** A new picture each time you land on a game, or
+  a slideshow that changes every few seconds while you stay.
+- **Animated artwork.** GIF and MP4 covers and backgrounds play in place — the selected game, or
+  every tile at once if you like it lively.
+- **Four places to find art.** Steam's own store art and trailers, SteamGridDB, web image search,
+  and YouTube — one search dialog with filters and a live preview, one click to download.
+- **Smooth changes.** Crossfade, fade through black, fade through white, or a clean cut, chosen
+  separately for covers and backgrounds. Same look in Desktop and Fullscreen.
+- **Works with your theme.** Rotating covers and backgrounds need nothing from a theme. Animated
+  ones need a single line — many themes already have it.
+- **Your art is safe.** Whatever a game had before joins the rotation instead of being replaced,
+  and one click puts everything back the way it was.
+- **Only the games you choose.** Nothing happens to a game until you give it artwork.
 
-## Features
+## Getting started
 
-- **Rotates backgrounds and covers** from a per-game folder you control — pick once per session,
-  pick again on every selection, or run a slideshow while a game stays selected.
-- **Plays motion artwork.** Animated GIF and MP4 backgrounds and covers, through the plugin's own
-  renderer, on the selected tile or on every tile.
-- **Every theme, out of the box, for stills.** The plugin writes Playnite's own
-  `Game.CoverImage` / `Game.BackgroundImage`; Playnite draws them. Nothing for a theme to do.
-- **One line for motion.** A theme places `ImageRotater_Cover` / `ImageRotater_Background` and video
-  plays there. Themes built for BackgroundChanger's element names are answered too.
-- **Search and download** from Steam, SteamGridDB, the web and YouTube, with shape and style
-  filters and an in-dialog preview.
-- **Your artwork is preserved.** Existing art is copied into the plugin's folder before anything is
-  replaced, rotates as a normal candidate, and can be put back in one click.
-- **Opt-in per game.** Games you never set up are left completely alone.
-
-## Usage
-
-Right-click a game → **ImageRotater** → *Backgrounds* or *Covers*:
+1. Install the extension and open a game's right-click menu.
+2. **ImageRotater → Backgrounds → Search images online…** (or **Covers**).
+3. Pick a few results and download them. That's it — the game rotates from now on.
 
 | Command | What it does |
 |---|---|
-| Add artwork files… | Copy images or video from disk into this game's folder |
-| Search images online… | Steam, SteamGridDB, web and YouTube in one dialog, with preview |
-| Download from SteamGridDB (automatic) | Take the best match without asking |
-| Open folder | Open this game's artwork folder |
-| Remove all | Clear this game's artwork |
-
-**Backgrounds** rotate as you *leave* a game, so the next visit lands clean. **Covers** rotate as
-you *arrive*, and the tile changes while you watch.
+| Add artwork files… | Use images or video you already have |
+| Search images online… | Steam, SteamGridDB, the web and YouTube, with preview |
+| Download from SteamGridDB (automatic) | Grab the best match without asking |
+| Open folder | See this game's artwork |
+| Remove all | Take this game out of the rotation |
 
 ## Settings
 
-Five pages. The master switch on General governs everything.
-
 ### Setup
 
-| Setting | What it unlocks |
-|---|---|
-| SteamGridDB API key | The SteamGridDB tab of the search dialog. Free at steamgriddb.com → Preferences → API. |
-| ffmpeg | GIF → MP4 conversion, video repair, and YouTube downloads. Not bundled (GPL). |
-| yt-dlp | The YouTube tab. |
-| deno | yt-dlp's JavaScript runtime; without it YouTube returns nothing. |
+Optional extras. Everything below unlocks a feature; the extension works without any of it.
 
-Leave a path blank and the plugin looks on your `PATH`.
+| Item | What it unlocks |
+|---|---|
+| SteamGridDB API key | The SteamGridDB tab. Free from steamgriddb.com → Preferences → API. |
+| ffmpeg | Converting GIFs to MP4, repairing videos, and YouTube downloads. |
+| yt-dlp | The YouTube tab. |
+| deno | Needed alongside yt-dlp for YouTube. |
+
+Leave a path blank if the tool is already on your system path.
 
 ### General
 
 | Setting | Default | What it does |
 |---|---|---|
 | Enable rotation | On | The master switch. |
-| Work with themes built for BackgroundChanger | On | Answers to BackgroundChanger's element names. BackgroundChanger itself must be disabled. Restart to apply. |
-| Enable debug logging | Off | Writes `ImageRotater.log` to the plugin data folder. |
+| Work with themes built for BackgroundChanger | On | Lets themes made for BackgroundChanger show animated art from ImageRotater. Disable BackgroundChanger itself. |
+| Enable debug logging | Off | Writes a log for bug reports. |
 
 ### Backgrounds
 
 | Setting | Default | What it does |
 |---|---|---|
-| Transition *(Animation page)* | Crossfade | Crossfade, fade through black, fade through white, or cut. |
-| Letterbox odd-shaped backgrounds | On | Pins ultrawide and square art to a screen-shaped canvas over a blurred fill of itself. Originals untouched. |
-| Level background sizes | On | Publishes every background for a game at one width, so Playnite's blur stops jumping between them. |
-| When a game has several | Pick once per session | Or pick again every time the game is selected, or always the same image. |
+| Transition *(Animation page)* | Crossfade | How one background gives way to the next. |
+| Letterbox odd-shaped backgrounds | On | Ultrawide and square art sits on a blurred, screen-shaped canvas of itself instead of being stretched. |
+| Level background sizes | On | Keeps the blur consistent when backgrounds of different sizes swap. |
+| When a game has several | Pick once per session | Or pick again every time you select the game, or always show the same one. |
 | Slideshow | Off | Change the background every N seconds while a game stays selected. |
 
 ### Covers
 
 | Setting | Default | What it does |
 |---|---|---|
-| Rotate cover art | Off | Off by default — covers are usually curated deliberately. |
-| Play animated covers on every tile | Off | Otherwise only the selected tile animates. Every animated tile decodes continuously in a 32-bit process; leave off for big video libraries. |
-| Transition *(Animation page)* | Crossfade | As for backgrounds, chosen independently. |
+| Rotate cover art | Off | Turn on to rotate box art too. |
+| Play animated covers on every tile | Off | Otherwise only the selected game's cover moves. Best left off for very large video libraries. |
+| Transition *(Animation page)* | Crossfade | How one cover gives way to the next. |
 | When a game has several | Pick once per session | As for backgrounds. |
 | Slideshow | Off | Change the cover every N seconds while a game stays selected. |
 
 ### Library
 
-Convert all GIFs to MP4 · Convert all JPEGs to PNG · Repair videos (fix black tiles) · Repair
-artwork references · Reset library (deletes every plugin image and restores the original art).
+One-click maintenance for everything ImageRotater holds: convert all GIFs to MP4, convert all
+JPEGs to PNG, repair videos that show as black tiles, repair broken artwork links, or reset the
+library to the original art.
 
 ## Theme authors
 
-Stills need nothing from you. For GIF and video, add one `ContentControl` next to your own cover or
-background element and leave that element as it is. The
-[theme guide](docs/THEME_INTEGRATION.md) has the checklist, the exact markup, a worked example
-against Aniki ReMake, and the two things not to do.
+Rotating stills need nothing from a theme. For animated covers and backgrounds, add one line next
+to your existing artwork element — the [theme guide](docs/THEME_INTEGRATION.md) shows exactly
+where, with a worked example.
 
 ## Requirements
 
-- Playnite **10.57 or newer** (Desktop or Fullscreen)
+- Playnite **10.57 or newer**, Desktop or Fullscreen
 - Windows with .NET Framework 4.6.2
 - Optional: [ffmpeg](https://ffmpeg.org/), [yt-dlp](https://github.com/yt-dlp/yt-dlp) and
-  [deno](https://deno.com/) for conversion and YouTube; a free
+  [deno](https://deno.com/) for conversions and YouTube; a free
   [SteamGridDB API key](https://www.steamgriddb.com/profile/preferences/api) for that source
 
-MP4/H.264 plays everywhere. WebM needs a decoder Windows does not ship. ImageRotater cannot run
-alongside BackgroundChanger — Playnite hands a shared element name to whichever plugin claims it
-first.
+Use MP4 for video. Cannot run at the same time as BackgroundChanger.
 
 ## Installation
 
-Download the `.pext` from [Releases](../../releases) and open it with Playnite, or drag it onto a
-running Playnite window.
+Download the `.pext` from [Releases](../../releases) and open it with Playnite, or drag it onto
+the Playnite window.
 
 ## Troubleshooting
 
-Turn on **Enable debug logging** and attach
-`%AppData%\Playnite\ExtensionsData\72b7d457-0621-429b-8368-665bc53ff896\ImageRotater.log` to
-your report — it is fresh each session and records every selection and rotation. Artwork lives
-next to it under `Images\{game id}\`.
+Turn on **Enable debug logging** in settings and attach `ImageRotater.log` from
+`%AppData%\Playnite\ExtensionsData\72b7d457-0621-429b-8368-665bc53ff896\` to your report.
 
 ## Building from source
 
 ```bash
-dotnet clean -c Release
 dotnet build -c Release
 powershell -ExecutionPolicy Bypass -File scripts/package_extension.ps1
 ```
 
-`version.txt` is the single source of truth; the packaging script stamps `extension.yaml` and
-`AssemblyInfo.cs` from it and refuses to package a stale build. Tests: `dotnet test -c Release`.
-Branding rasters: `scripts/build_branding.ps1` (headless Edge, no other tools).
+Tests: `dotnet test -c Release`. Branding: `scripts/build_branding.ps1`.
 
 ## License
 
