@@ -31,20 +31,22 @@
 
 A library that never looks the same twice. ImageRotater keeps a collection of covers and
 backgrounds for each game and shows a different one every time you visit — or cycles through them
-while you linger. Bring in animated GIFs and video and your covers move.
+while you linger. With a theme that supports it, covers and backgrounds can be animated GIFs and
+video too.
 
 ## Highlights
 
 - **Backgrounds and covers rotate on their own.** A new picture each time you land on a game, or
   a slideshow that changes every few seconds while you stay.
-- **Animated artwork.** GIF and MP4 covers and backgrounds play in place — the selected game, or
-  every tile at once if you like it lively.
+- **Animated artwork, in supporting themes.** GIF and MP4 covers and backgrounds play in place —
+  the selected game, or every tile at once if you like it lively. Playnite cannot play video on
+  its own, so this needs a theme built for ImageRotater (or for BackgroundChanger).
 - **Four places to find art.** Steam's own store art and trailers, SteamGridDB, web image search,
   and YouTube — one search dialog with filters and a live preview, one click to download.
 - **Smooth changes.** Crossfade, fade through black, fade through white, or a clean cut, chosen
   separately for covers and backgrounds. Same look in Desktop and Fullscreen.
-- **Works with your theme.** Rotating covers and backgrounds need nothing from a theme. Animated
-  ones need a single line — many themes already have it.
+- **Works with every theme for stills.** Rotating covers and backgrounds need nothing from a
+  theme. Animation is the one thing a theme has to opt into.
 - **Your art is safe.** Whatever a game had before joins the rotation instead of being replaced,
   and one click puts everything back the way it was.
 - **Only the games you choose.** Nothing happens to a game until you give it artwork.
@@ -114,9 +116,10 @@ library to the original art.
 
 ## Theme authors
 
-Rotating stills need nothing from a theme. For animated covers and backgrounds, add one line next
-to your existing artwork element — the [theme guide](docs/THEME_INTEGRATION.md) shows exactly
-where, with a worked example.
+Rotating stills need nothing from a theme. Animated covers and backgrounds are not something
+Playnite can show by itself: a theme adds one line next to its existing artwork element and the
+extension does the rest. The [theme guide](docs/THEME_INTEGRATION.md) shows exactly where, with a
+worked example.
 
 ## Requirements
 
