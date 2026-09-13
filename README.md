@@ -31,25 +31,23 @@
 
 A library that never looks the same twice. ImageRotater keeps a collection of covers and
 backgrounds for each game and shows a different one every time you visit — or cycles through them
-while you linger. With a theme that supports it, covers and backgrounds can be animated GIFs and
-video too.
+while you linger.
 
 ## Highlights
 
 - **Backgrounds and covers rotate on their own.** A new picture each time you land on a game, or
   a slideshow that changes every few seconds while you stay.
-- **Animated artwork, in supporting themes.** GIF and MP4 covers and backgrounds play in place —
-  the selected game, or every tile at once if you like it lively. Playnite cannot play video on
-  its own, so this needs a theme built for ImageRotater (or for BackgroundChanger).
 - **Four places to find art.** Steam's own store art and trailers, SteamGridDB, web image search,
   and YouTube — one search dialog with filters and a live preview, one click to download.
 - **Smooth changes.** Crossfade, fade through black, fade through white, or a clean cut, chosen
   separately for covers and backgrounds. Same look in Desktop and Fullscreen.
-- **Works with every theme for stills.** Rotating covers and backgrounds need nothing from a
-  theme. Animation is the one thing a theme has to opt into.
+- **Works with every theme.** Nothing to configure, nothing for a theme to add.
 - **Your art is safe.** Whatever a game had before joins the rotation instead of being replaced,
   and one click puts everything back the way it was.
 - **Only the games you choose.** Nothing happens to a game until you give it artwork.
+- **And, in supporting themes, animated artwork.** GIF and MP4 covers and backgrounds play in
+  place — the selected game, or every tile at once. Playnite cannot play video on its own, so this
+  one needs a theme built for ImageRotater (or for BackgroundChanger); everything above does not.
 
 ## Getting started
 
