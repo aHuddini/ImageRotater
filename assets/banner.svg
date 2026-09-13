@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="t">
+  <title id="t">ImageRotater - rotating artwork for Playnite: stills, GIF and video</title>
+  <defs>
+    <!-- The settings page ground and accent: the mark and the plugin's own
+         page are the same indigo and lavender, so one is recognisably the
+         other. -->
+    <linearGradient id="field" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#1F1B2C"/>
+      <stop offset="1" stop-color="#12101A"/>
+    </linearGradient>
+    <linearGradient id="cardBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4A3A7A"/>
+      <stop offset="1" stop-color="#2E2450"/>
+    </linearGradient>
+    <linearGradient id="cardMid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7A5CC8"/>
+      <stop offset="1" stop-color="#4E3A90"/>
+    </linearGradient>
+    <linearGradient id="cardFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C9AEFF"/>
+      <stop offset="0.55" stop-color="#A182EE"/>
+      <stop offset="1" stop-color="#7A5CC8"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B48CFF" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#E4D4FF"/>
+    </linearGradient>
+  </defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#1D1928"/>
+    <stop offset="1" stop-color="#0F0D15"/>
+  </linearGradient>
+  <linearGradient id="wm" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#C9AEFF"/>
+    <stop offset="1" stop-color="#8A66E0"/>
+  </linearGradient>
+  <rect width="1200" height="320" fill="url(#bg)"/>
+  <!-- The mark, at 224px, left of the wordmark. -->
+  <g transform="translate(64 48) scale(0.875)">
+
+
+  <rect width="256" height="256" rx="56" fill="url(#field)"/>
+
+  <!-- Cards fan from one bottom pivot, back to front, the way a stack of
+       covers cycles: each one a stop later in the same gradient. -->
+  <g transform="translate(128 196)">
+    <g transform="rotate(-22)">
+      <rect x="-40" y="-132" width="80" height="120" rx="10" fill="url(#cardBack)" stroke="#12101A" stroke-width="4"/>
+    </g>
+    <g transform="rotate(-11)">
+      <rect x="-40" y="-136" width="80" height="120" rx="10" fill="url(#cardMid)" stroke="#12101A" stroke-width="4"/>
+    </g>
+    <g>
+      <rect x="-40" y="-140" width="80" height="120" rx="10" fill="url(#cardFront)" stroke="#12101A" stroke-width="4"/>
+      <!-- A picture on the front card: horizon and a sun, the oldest
+           shorthand for "an image". -->
+      <rect x="-30" y="-130" width="60" height="100" rx="6" fill="#1F1B2C" fill-opacity="0.35"/>
+      <circle cx="10" cy="-104" r="9" fill="#F3ECFF" fill-opacity="0.9"/>
+      <path d="M -30 -46 L -8 -78 L 4 -64 L 14 -74 L 30 -52 L 30 -30 L -30 -30 Z" fill="#F3ECFF" fill-opacity="0.85"/>
+      <rect x="-40" y="-140" width="80" height="120" rx="10" fill="url(#sheen)"/>
+    </g>
+  </g>
+
+  <!-- The rotation: an arc sweeping over the top of the stack into an
+       arrowhead, the cue that the front card is only the current one. -->
+  <path d="M 52 96 A 88 88 0 0 1 176 52" fill="none" stroke="url(#arc)" stroke-width="12" stroke-linecap="round"/>
+  <path d="M 164 34 L 190 50 L 168 70" fill="none" stroke="#E4D4FF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+  </g>
+  <text x="330" y="168" font-family="Segoe UI, Segoe UI Variable Display, Helvetica, Arial, sans-serif" font-size="88" font-weight="600" fill="#ECE8F2">Image<tspan fill="url(#wm)">Rotater</tspan></text>
+  <text x="334" y="228" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="400" fill="#A39BB2">Rotating artwork for Playnite - stills, GIF and video</text>
+</svg>
