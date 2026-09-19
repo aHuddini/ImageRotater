@@ -103,6 +103,10 @@ namespace ImageRotater.Controls
             // one - see the note on the cover control's equivalent. A
             // video-to-video switch otherwise assigns a new Source with the
             // previous media still open.
+            //
+            // Its last frame stays on screen and fades, so releasing it is not
+            // a cut - see HandoffImage.
+            HandOffVideoFrame();
             StopVideo();
 
             // A different game means the previous pick no longer applies.
@@ -317,6 +321,65 @@ namespace ImageRotater.Controls
             DisplayVideo.Source = new Uri(path);
             DisplayVideo.Visibility = Visibility.Visible;
             DisplayVideo.Play();
+        }
+
+        // Freezes the video's current frame into HandoffImage and fades that
+        // out, so the MediaElement can be released immediately without the
+        // picture vanishing in one frame.
+        //
+        // Rendered at half resolution: this is on screen for 400 ms while
+        // dissolving, where a softer image is invisible and a full-size
+        // Pbgra32 of a 4K window is 30 MB of allocation on the UI thread.
+        private void HandOffVideoFrame()
+        {
+            if (DisplayVideo.Source == null ||
+                DisplayVideo.Visibility != Visibility.Visible ||
+                DisplayVideo.ActualWidth < 2 ||
+                DisplayVideo.ActualHeight < 2)
+            {
+                return;
+            }
+
+            try
+            {
+                var frame = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)(DisplayVideo.ActualWidth / 2),
+                    (int)(DisplayVideo.ActualHeight / 2),
+                    48, 48,
+                    System.Windows.Media.PixelFormats.Pbgra32);
+
+                frame.Render(DisplayVideo);
+                frame.Freeze();
+
+                // Picks up from whatever opacity the video had - a video
+                // still fading in hands off at that level rather than
+                // flashing to full.
+                HandoffImage.BeginAnimation(OpacityProperty, null);
+                HandoffImage.Source = frame;
+                HandoffImage.Opacity = DisplayVideo.Opacity;
+                HandoffImage.Visibility = Visibility.Visible;
+
+                var fade = new System.Windows.Media.Animation.DoubleAnimation(
+                    HandoffImage.Opacity, 0.0,
+                    new Duration(TimeSpan.FromMilliseconds(400)));
+
+                fade.Completed += (s, e) =>
+                {
+                    // Only if no later handoff has taken the layer over.
+                    if (ReferenceEquals(HandoffImage.Source, frame))
+                    {
+                        HandoffImage.Visibility = Visibility.Collapsed;
+                        HandoffImage.Source = null;
+                    }
+                };
+
+                HandoffImage.BeginAnimation(OpacityProperty, fade);
+            }
+            catch (Exception ex)
+            {
+                // Without the snapshot the switch is a cut, as it always was.
+                Logger.Warn(ex, "ImageRotater: could not capture the outgoing video frame");
+            }
         }
 
         // Dissolves the video away over the still underneath, then releases

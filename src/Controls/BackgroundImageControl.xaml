@@ -38,6 +38,24 @@
                       MediaEnded="DisplayVideo_MediaEnded"
                       MediaFailed="DisplayVideo_MediaFailed"/>
 
+        <!-- The last frame of a video, on its way out.
+
+             Switching games releases the video at once - a new video cannot
+             open while the old media is still held - and that one-frame cut
+             exposed whatever sat underneath: Playnite's own background for
+             the game being LEFT, which then crossfaded to the new game. Video,
+             flash of the old still, fade. This layer holds a snapshot of the
+             final frame over that gap and dissolves at the same rate as the
+             crossfade below it, so the video appears to fade into the next
+             game. Above the MediaElement so a new video fading up shows
+             through it. Never touched by Refresh - it outlives the switch. -->
+        <Image x:Name="HandoffImage"
+               Visibility="Collapsed"
+               IsHitTestVisible="False"
+               Stretch="UniformToFill"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Top"/>
+
         <!-- Shown only when a path exists but the file is missing or corrupt.
              Never shown for "this game has no image" - that renders nothing so
              the theme's own background shows through. Vector-drawn so it stays
