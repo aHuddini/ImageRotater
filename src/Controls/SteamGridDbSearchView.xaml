@@ -114,16 +114,22 @@
                     <ItemsControl ItemsSource="{Binding AspectGroups}" Margin="0,0,0,12">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="0,0,0,8">
-                                    <!-- Ticking the group ticks every dimension
-                                         under it, so "all square covers" is one
-                                         click. -->
-                                    <CheckBox Content="{Binding Label}"
-                                              IsChecked="{Binding IsChecked}"
-                                              FontWeight="SemiBold"
-                                              Margin="0,2"/>
+                                <!-- Collapsed by default. A result set spans a
+                                     dozen resolutions across five or six
+                                     shapes, and the shape is what people pick
+                                     by: ticking the group ticks every
+                                     dimension under it, so "all square covers"
+                                     is one click with nothing expanded. -->
+                                <Expander IsExpanded="{Binding IsExpanded}"
+                                          Margin="0,0,0,4">
+                                    <Expander.Header>
+                                        <CheckBox Content="{Binding Display}"
+                                                  IsChecked="{Binding IsChecked}"
+                                                  FontWeight="SemiBold"
+                                                  Margin="0,2"/>
+                                    </Expander.Header>
                                     <ItemsControl ItemsSource="{Binding Dimensions}"
-                                                  Margin="18,2,0,0">
+                                                  Margin="18,2,0,4">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <CheckBox Content="{Binding Label}"
@@ -132,7 +138,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                </StackPanel>
+                                </Expander>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -163,13 +169,15 @@
                          open this dialog, and hiding it behind a filter meant
                          the good results were invisible until you knew to ask.
 
-                         Applies as it is ticked, rather than waiting for the
-                         next search: it filters what is already on screen. -->
+                         Every filter in this column applies as it is ticked.
+                         They all narrow what is already on screen - no
+                         request is involved - so an Apply button was pure
+                         ceremony and made the boxes look broken. -->
                     <CheckBox x:Name="ShowAnimatedBox"
                               Content="Look for animated content"
                               IsChecked="True"
-                              Checked="AnimatedFilter_Changed"
-                              Unchecked="AnimatedFilter_Changed"
+                              Checked="ContentFilter_Changed"
+                              Unchecked="ContentFilter_Changed"
                               Margin="0,2"/>
 
                     <!-- On by default. Smaller on disk, and MP4 plays through
@@ -189,13 +197,12 @@
                                Margin="0,0,0,12"/>
 
                     <TextBlock Text="Also show" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                    <CheckBox x:Name="ShowNsfwBox" Content="Adult content" Margin="0,2"/>
-                    <CheckBox x:Name="ShowHumorBox" Content="Humour" Margin="0,2"/>
-                    <CheckBox x:Name="ShowEpilepsyBox" Content="Flashing images" Margin="0,2"/>
-
-                    <Button Content="Apply filters"
-                            Margin="0,12,0,0"
-                            Click="ApplyFilters_Click"/>
+                    <CheckBox x:Name="ShowNsfwBox" Content="Adult content" Margin="0,2"
+                              Checked="ContentFilter_Changed" Unchecked="ContentFilter_Changed"/>
+                    <CheckBox x:Name="ShowHumorBox" Content="Humour" Margin="0,2"
+                              Checked="ContentFilter_Changed" Unchecked="ContentFilter_Changed"/>
+                    <CheckBox x:Name="ShowEpilepsyBox" Content="Flashing images" Margin="0,2"
+                              Checked="ContentFilter_Changed" Unchecked="ContentFilter_Changed"/>
                 </StackPanel>
             </ScrollViewer>
 
@@ -267,7 +274,11 @@
                                             BorderThickness="2"
                                             BorderBrush="Transparent">
                                         <StackPanel>
-                                            <Grid>
+                                            <!-- Centred so the badge below sits on
+                                                 the image, not the tile's corner,
+                                                 when the image is narrower than
+                                                 the box. -->
+                                            <Grid HorizontalAlignment="Center">
                                                 <!-- Every tile shows the static THUMBNAIL, animated
                                                      or not.
 
@@ -280,9 +291,14 @@
                                                      results have no size ceiling.
 
                                                      Animation lives in the preview window now:
-                                                     one file at a time, and only when asked for. -->
+                                                     one file at a time, and only when asked for.
+
+                                                     Uniform, not UniformToFill: the whole image,
+                                                     letterboxed if need be. Filling the box cropped
+                                                     every square cover to a banner strip, so the
+                                                     result on screen was not the result on offer. -->
                                                 <Image Height="{Binding ThumbnailHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                       Stretch="UniformToFill"
+                                                       Stretch="Uniform"
                                                        Source="{Binding ThumbnailUrl}"
                                                        Loaded="ResultImage_Loaded"
                                                        MouseEnter="ResultImage_MouseEnter"
@@ -489,11 +505,29 @@
 
         <!-- Status + actions -->
         <DockPanel Grid.Row="2" Margin="0,10,0,0">
+            <!-- Close sits at the far right, the primary action beside it -
+                 the order every dialog on the platform uses. -->
+            <Button Content="Close"
+                    DockPanel.Dock="Right"
+                    MinWidth="90"
+                    Margin="8,0,0,0"
+                    Click="CloseButton_Click"/>
+
+            <!-- Accent-coloured so the one button that does something is
+                 not a twin of the one that leaves. HighlightGlyphBrush is the
+                 accent every Playnite theme defines; the templates bind
+                 Background and BorderBrush, so it takes without a style of
+                 our own. White on an accent reads on light and dark themes
+                 alike, where the theme's TextBrush only suits one of them. -->
             <Button x:Name="DownloadButton"
                     Content="Download selected"
                     DockPanel.Dock="Right"
                     MinWidth="140"
                     Margin="8,0,0,0"
+                    Background="{DynamicResource HighlightGlyphBrush}"
+                    BorderBrush="{DynamicResource HighlightGlyphBrush}"
+                    Foreground="White"
+                    FontWeight="SemiBold"
                     Click="DownloadButton_Click"/>
 
             <!-- Paging, shown only when there is more than one page.
@@ -520,10 +554,6 @@
                         IsEnabled="{Binding CanGoForward}"
                         Click="NextPage_Click"/>
             </StackPanel>
-            <Button Content="Close"
-                    DockPanel.Dock="Right"
-                    MinWidth="90"
-                    Click="CloseButton_Click"/>
             <!-- Foreground must be set explicitly. Without it the TextBlock
                  inherits WPF's default black, which is unreadable on a dark
                  Playnite theme - the status was effectively invisible.

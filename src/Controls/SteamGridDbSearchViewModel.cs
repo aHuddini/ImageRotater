@@ -21,10 +21,32 @@ namespace ImageRotater.Controls
         public string Value { get; set; }
         public string Label { get; set; }
 
+        // Runs after a tick changes, so the filter follows it with no Apply
+        // button. Set by the view model once the option is built.
+        public Action Changed { get; set; }
+
         public bool IsChecked
         {
             get => isChecked;
-            set { isChecked = value; OnPropertyChanged(); }
+            set => SetChecked(value, true);
+        }
+
+        // A group ticking its sizes passes false and fires Changed once
+        // itself, rather than once per size.
+        internal void SetChecked(bool value, bool raiseChanged)
+        {
+            if (isChecked == value)
+            {
+                return;
+            }
+
+            isChecked = value;
+            OnPropertyChanged(nameof(IsChecked));
+
+            if (raiseChanged)
+            {
+                Changed?.Invoke();
+            }
         }
     }
 
@@ -34,11 +56,27 @@ namespace ImageRotater.Controls
     public class AspectGroupOption : ObservableObject
     {
         private bool isChecked;
+        private bool isExpanded;
 
         public string Label { get; set; }
         public int TotalCount { get; set; }
         public ObservableCollection<FilterOption> Dimensions { get; }
             = new ObservableCollection<FilterOption>();
+
+        // What the header shows. Kept apart from Label, which is the key a
+        // remembered tick is matched by - the count changes with every
+        // search, the shape does not.
+        public string Display => $"{Label} ({TotalCount})";
+
+        // Collapsed until opened: the group tick covers the common case, and
+        // the resolutions under it are detail most searches never need.
+        public bool IsExpanded
+        {
+            get => isExpanded;
+            set { isExpanded = value; OnPropertyChanged(); }
+        }
+
+        public Action Changed { get; set; }
 
         public bool IsChecked
         {
@@ -50,8 +88,10 @@ namespace ImageRotater.Controls
 
                 foreach (FilterOption dimension in Dimensions)
                 {
-                    dimension.IsChecked = value;
+                    dimension.SetChecked(value, false);
                 }
+
+                Changed?.Invoke();
             }
         }
     }
@@ -63,6 +103,21 @@ namespace ImageRotater.Controls
         private readonly ISteamGridDbClient _client;
 
         private List<SteamGridDbArtwork> _allResults = new List<SteamGridDbArtwork>();
+
+        // What the user wants ticked, kept apart from the option objects that
+        // carry the ticks on screen.
+        //
+        // Those objects are rebuilt from every result set, so a tick used to
+        // die with them: ticking a resolution and pressing Search cleared it,
+        // and switching tabs (which rebuilds against no results) cleared
+        // everything. These sets outlive the objects. They are refreshed from
+        // the options only while options exist - so an empty rebuild keeps
+        // the last real state - and a preset seeds them before the first
+        // search, which is all "remember my filters" needs.
+        private readonly HashSet<string> _wantGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _wantDims = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _wantStyles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _expandedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Everything matching the current filter, of which Results holds one
         // page.
@@ -466,41 +521,89 @@ namespace ImageRotater.Controls
             }
         }
 
-        // Options come from the current results, so they cannot duplicate and
-        // cannot offer a value that would filter everything away.
-        private void RebuildFilterOptions()
+        // Seeds the ticks from a remembered preset. Call before the first
+        // search; the options that search builds come up already ticked.
+        public void SeedTicks(SearchPreset preset)
         {
-            // What was ticked before the rebuild, so a new search does not
-            // silently discard it.
-            //
-            // These options are recreated from whatever the results contain, so
-            // every tick used to die with the objects that carried it. Ticking
-            // a resolution and pressing Search therefore cleared the tick -
-            // which reads as the checkbox refusing to stay on.
-            //
-            // Only values that still exist in the new results come back. A
-            // resolution nothing matches any more cannot be re-ticked, and
-            // silently keeping it would filter every result away and look like
-            // the search returned nothing.
-            var wereChecked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (preset == null)
+            {
+                return;
+            }
+
+            _wantGroups.UnionWith(preset.Groups ?? new List<string>());
+            _wantDims.UnionWith(preset.Dimensions ?? new List<string>());
+            _wantStyles.UnionWith(preset.Styles ?? new List<string>());
+        }
+
+        // Writes the current ticks into a preset, for saving.
+        public void SnapshotTicks(SearchPreset preset)
+        {
+            CollectTicks();
+
+            preset.Groups = _wantGroups.ToList();
+            preset.Dimensions = _wantDims.ToList();
+            preset.Styles = _wantStyles.ToList();
+        }
+
+        // Reads the ticks back off the option objects - only while there are
+        // any. An empty option list says nothing about what the user wants.
+        //
+        // A group counts as wanted only when every dimension under it is
+        // ticked. The group box itself is not consulted: its setter cascades
+        // down but nothing cascades back up, so after "tick the group, untick
+        // one size" the box still reads true and would restore the size.
+        private void CollectTicks()
+        {
+            if (DimensionOptions.Count == 0 && StyleOptions.Count == 0)
+            {
+                return;
+            }
+
+            _wantGroups.Clear();
+            _wantDims.Clear();
+            _wantStyles.Clear();
+            _expandedGroups.Clear();
+
+            foreach (AspectGroupOption group in AspectGroups)
+            {
+                if (group.IsExpanded)
+                {
+                    _expandedGroups.Add(group.Label);
+                }
+
+                if (group.Dimensions.Count > 0 && group.Dimensions.All(d => d.IsChecked))
+                {
+                    _wantGroups.Add(group.Label);
+                }
+            }
 
             foreach (FilterOption option in DimensionOptions)
             {
                 if (option.IsChecked && !string.IsNullOrEmpty(option.Value))
                 {
-                    wereChecked.Add(option.Value);
+                    _wantDims.Add(option.Value);
                 }
             }
-
-            var checkedStyles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (FilterOption option in StyleOptions)
             {
                 if (option.IsChecked && !string.IsNullOrEmpty(option.Value))
                 {
-                    checkedStyles.Add(option.Value);
+                    _wantStyles.Add(option.Value);
                 }
             }
+        }
+
+        // Options come from the current results, so they cannot duplicate and
+        // cannot offer a value that would filter everything away.
+        //
+        // Only values that exist in the new results come back ticked. A
+        // resolution nothing matches any more cannot be re-ticked, and
+        // silently keeping it would filter every result away and look like
+        // the search returned nothing.
+        private void RebuildFilterOptions()
+        {
+            CollectTicks();
 
             DimensionOptions.Clear();
             AspectGroups.Clear();
@@ -512,7 +615,8 @@ namespace ImageRotater.Controls
                 var group = new AspectGroupOption
                 {
                     Label = grouping.Label,
-                    TotalCount = grouping.TotalCount
+                    TotalCount = grouping.TotalCount,
+                    IsExpanded = _expandedGroups.Contains(grouping.Label)
                 };
 
                 foreach (DimensionCount dimension in grouping.Dimensions)
@@ -521,11 +625,28 @@ namespace ImageRotater.Controls
                     {
                         Value = dimension.Dimensions,
                         Label = $"{dimension.Dimensions} ({dimension.Count})",
-                        IsChecked = wereChecked.Contains(dimension.Dimensions)
+                        IsChecked = _wantDims.Contains(dimension.Dimensions)
                     };
 
                     group.Dimensions.Add(option);
                     DimensionOptions.Add(option);
+                }
+
+                // A wanted group ticks every size under it - including sizes
+                // this result set is the first to offer. Cascading true onto
+                // sizes already ticked changes nothing.
+                if (_wantGroups.Contains(grouping.Label)
+                    || (group.Dimensions.Count > 0 && group.Dimensions.All(d => d.IsChecked)))
+                {
+                    group.IsChecked = true;
+                }
+
+                // Wired last: the ticks above are the rebuild restoring state,
+                // not the user changing it, and the caller applies once after.
+                group.Changed = ApplyFilter;
+                foreach (FilterOption option in group.Dimensions)
+                {
+                    option.Changed = ApplyFilter;
                 }
 
                 AspectGroups.Add(group);
@@ -538,7 +659,8 @@ namespace ImageRotater.Controls
                 {
                     Value = style,
                     Label = style,
-                    IsChecked = checkedStyles.Contains(style)
+                    IsChecked = _wantStyles.Contains(style),
+                    Changed = ApplyFilter
                 });
             }
         }

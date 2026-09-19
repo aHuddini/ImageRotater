@@ -105,6 +105,18 @@ namespace ImageRotater.Controls
                 FilterToggleRow.Visibility = Visibility.Visible;
             }
 
+            // Covers get a square box, backgrounds keep the banner.
+            //
+            // Cover results are 1:1 and 2:3; backgrounds are 16:9 and wider.
+            // One box cannot suit both: a square cover in the banner box is a
+            // 112px postage stamp, a hero in a square box wastes half of it.
+            // 16 is the frame's padding and border, so the box matches the
+            // tile's inner width exactly.
+            if (kind == ArtworkKind.Cover)
+            {
+                ThumbnailHeight = TileWidth - 16;
+            }
+
             // Conversion needs ffmpeg, which the plugin cannot bundle - it is
             // GPL and this project is MIT. Say so on the control rather than
             // leaving a ticked box that quietly does nothing.
@@ -115,6 +127,8 @@ namespace ImageRotater.Controls
                 ConvertGifsNote.Text =
                     "Needs ffmpeg on your PATH. Without it, GIFs download as GIFs.";
             }
+
+            RestorePreset();
 
             // Search straight away - the user opened this from a specific game,
             // so making them press Search first is a pointless extra step.
@@ -140,6 +154,8 @@ namespace ImageRotater.Controls
                     _open = null;
                 }
 
+                SavePreset();
+
                 // The web view owns a browser process; leaving it running
                 // behind a closed dialog would leak one per search.
                 if (_previewRenderer != null)
@@ -148,6 +164,81 @@ namespace ImageRotater.Controls
                     _previewRenderer = null;
                 }
             };
+        }
+
+        // Opens the dialog the way it was last closed for this artwork kind.
+        //
+        // No "save preset" button: what the user last did is the preset. The
+        // same shape and style get picked for every game in a session, and
+        // re-ticking them for each was the whole complaint.
+        private void RestorePreset()
+        {
+            SearchPreset preset = SearchPresets.Load(_pluginUserDataPath, _kind);
+            if (preset == null)
+            {
+                return;
+            }
+
+            _model.SeedTicks(preset);
+
+            // Both the box and the filter flag: the box's Checked handler is
+            // guarded by IsLoaded and does not fire this early.
+            ShowAnimatedBox.IsChecked = preset.ShowAnimated;
+            ShowNsfwBox.IsChecked = preset.ShowNsfw;
+            ShowHumorBox.IsChecked = preset.ShowHumor;
+            ShowEpilepsyBox.IsChecked = preset.ShowEpilepsy;
+            _model.Filter.ShowAnimated = preset.ShowAnimated;
+            _model.Filter.ShowNsfw = preset.ShowNsfw;
+            _model.Filter.ShowHumor = preset.ShowHumor;
+            _model.Filter.ShowEpilepsy = preset.ShowEpilepsy;
+
+            // Only while ffmpeg is there; the box was just disabled otherwise,
+            // and re-ticking it would request a conversion that cannot run.
+            if (GifConverter.IsAvailable)
+            {
+                ConvertGifsBox.IsChecked = preset.ConvertGifs;
+            }
+
+            // Selecting a tab here is safe: SourceTabs_SelectionChanged
+            // ignores changes before Loaded, and Loaded runs the one search.
+            TabItem tab = SourceTabs.Items.OfType<TabItem>()
+                .FirstOrDefault(t => t.Name == preset.Tab);
+
+            if (tab != null)
+            {
+                SourceTabs.SelectedItem = tab;
+                SyncSearchTermToTab();
+            }
+        }
+
+        private void SavePreset()
+        {
+            if (string.IsNullOrEmpty(_pluginUserDataPath))
+            {
+                return;
+            }
+
+            // Start from what was loaded, so a dialog that never got results
+            // (no key, network down) keeps the remembered ticks rather than
+            // saving none - and so ConvertGifs survives a session without
+            // ffmpeg, when the box is disabled and reads false.
+            SearchPreset preset = SearchPresets.Load(_pluginUserDataPath, _kind) ?? new SearchPreset();
+
+            _model.SnapshotTicks(preset);
+
+            preset.ShowAnimated = ShowAnimatedBox.IsChecked == true;
+            preset.ShowNsfw = ShowNsfwBox.IsChecked == true;
+            preset.ShowHumor = ShowHumorBox.IsChecked == true;
+            preset.ShowEpilepsy = ShowEpilepsyBox.IsChecked == true;
+
+            if (GifConverter.IsAvailable)
+            {
+                preset.ConvertGifs = ConvertGifsBox.IsChecked == true;
+            }
+
+            preset.Tab = (SourceTabs.SelectedItem as TabItem)?.Name ?? preset.Tab;
+
+            SearchPresets.Save(_pluginUserDataPath, _kind, preset);
         }
 
         // Puts keyboard focus on the first result tile, so D-pad navigation has
@@ -663,13 +754,16 @@ namespace ImageRotater.Controls
             _model.PreviousPage();
         }
 
-        // The animated filter applies as it is ticked, rather than waiting for
-        // Apply or the next search.
+        // The content boxes apply as they are ticked, like every other filter.
+        // The shape and style ticks do the same through the view model.
         //
-        // It filters what is ALREADY on screen - no request is involved - so
+        // They filter what is ALREADY on screen - no request is involved - so
         // making the user press a second button to see the effect was pure
-        // ceremony, and made the checkbox look broken.
-        private void AnimatedFilter_Changed(object sender, RoutedEventArgs e)
+        // ceremony, and made the boxes look broken.
+        //
+        // Not before Loaded: the constructor sets these boxes from the
+        // remembered preset and writes the flags itself.
+        private void ContentFilter_Changed(object sender, RoutedEventArgs e)
         {
             if (!IsLoaded)
             {
@@ -677,15 +771,9 @@ namespace ImageRotater.Controls
             }
 
             _model.Filter.ShowAnimated = ShowAnimatedBox.IsChecked == true;
-            _model.ApplyFilter();
-        }
-
-        private void ApplyFilters_Click(object sender, RoutedEventArgs e)
-        {
             _model.Filter.ShowNsfw = ShowNsfwBox.IsChecked == true;
             _model.Filter.ShowHumor = ShowHumorBox.IsChecked == true;
             _model.Filter.ShowEpilepsy = ShowEpilepsyBox.IsChecked == true;
-            _model.Filter.ShowAnimated = ShowAnimatedBox.IsChecked == true;
 
             _model.ApplyFilter();
         }
@@ -741,6 +829,27 @@ namespace ImageRotater.Controls
             _model.Status = saved == chosen.Count
                 ? $"Downloaded and converted {saved} {what}."
                 : $"Downloaded {saved} of {chosen.Count}. See the Playnite log for the rest.";
+
+            // Rotation needs something to rotate TO. One image is a static
+            // replacement, and a user who picked one and saw no transition
+            // reasonably concludes the plugin is broken - say so here, while
+            // the results to add a second one from are still on screen.
+            if (saved > 0 && CandidateCount() < 2)
+            {
+                _model.Status += " Tip: add at least one more - rotation and "
+                    + "transitions need two or more images.";
+            }
+        }
+
+        private int CandidateCount()
+        {
+            if (string.IsNullOrEmpty(_pluginUserDataPath) || _game == null)
+            {
+                return int.MaxValue;
+            }
+
+            return new GameImageStore(_pluginUserDataPath).RotationPoolSize(
+                _gameId, _kind, _kind == ArtworkKind.Cover ? _game.CoverImage : _game.BackgroundImage);
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
