@@ -55,6 +55,10 @@ while you linger.
 2. **ImageRotater → Backgrounds → Search images online…** (or **Covers**).
 3. Pick a few results and download them. That's it — the game rotates from now on.
 
+Rotation needs two or more images per game — with one there is nothing to change to, so no
+transition plays. A game's own artwork counts: it joins the rotation on first use, so a game that
+already has a cover needs only one download; a game with none needs two.
+
 | Command | What it does |
 |---|---|
 | Add artwork files… | Use images or video you already have |
@@ -83,7 +87,6 @@ Leave a path blank if the tool is already on your system path.
 | Setting | Default | What it does |
 |---|---|---|
 | Enable rotation | On | The master switch. |
-| Work with themes built for BackgroundChanger | On | Lets themes made for BackgroundChanger show animated art from ImageRotater. Disable BackgroundChanger itself. |
 | Enable debug logging | Off | Writes a log for bug reports. |
 
 ### Backgrounds
@@ -111,6 +114,13 @@ Leave a path blank if the tool is already on your system path.
 One-click maintenance for everything ImageRotater holds: convert all GIFs to MP4, convert all
 JPEGs to PNG, repair videos that show as black tiles, repair broken artwork links, or reset the
 library to the original art.
+
+### Coming from BackgroundChanger
+
+Settings > Library > Migration > **Import artwork from BackgroundChanger** copies every cover and background
+you gave that plugin into ImageRotater, game by game. Nothing of BackgroundChanger's is moved or
+deleted, and running it again only adds what is new. Disable BackgroundChanger afterwards - the
+two cannot run together.
 
 ## Theme authors
 

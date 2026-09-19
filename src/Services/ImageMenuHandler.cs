@@ -406,9 +406,20 @@ namespace ImageRotater.Services
 
             if (added > 0)
             {
-                _api.Dialogs.ShowMessage(
-                    $"Added {added} image(s) to {targets.Count} game(s).",
-                    "ImageRotater");
+                string message = $"Added {added} image(s) to {targets.Count} game(s).";
+
+                // Rotation needs something to rotate TO. Checked for a single
+                // game only; a batch add is not where a one-image setup happens.
+                Game only = targets.Count == 1 ? targets[0] : null;
+                if (only != null && _store.RotationPoolSize(
+                        only.Id, kind,
+                        kind == ArtworkKind.Cover ? only.CoverImage : only.BackgroundImage) < 2)
+                {
+                    message += "\n\nTip: add at least one more - rotation and transitions "
+                        + "need two or more images.";
+                }
+
+                _api.Dialogs.ShowMessage(message, "ImageRotater");
             }
 
             return added;

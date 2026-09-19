@@ -84,7 +84,6 @@ namespace ImageRotater
         // picks blur identically.
         private bool normaliseBackgroundSize = true;
 
-        private bool backgroundChangerCompatibility = true;
         private string steamGridDbApiKey = string.Empty;
 
         // Explicit paths to external tools, empty meaning "search PATH".
@@ -112,20 +111,6 @@ namespace ImageRotater
         {
             get => normaliseBackgroundSize;
             set { normaliseBackgroundSize = value; OnPropertyChanged(); }
-        }
-
-        // Also answer to the element names BackgroundChanger themes already use,
-        // so a theme built for that plugin works here with no edits.
-        //
-        // On by default: the two plugins cannot run together anyway (Playnite
-        // routes an element name to whichever plugin claimed it, so with both
-        // enabled the winner depends on load order), and the documented
-        // requirement is to disable BackgroundChanger first. The toggle stays
-        // so a user comparing the two can turn this off temporarily.
-        public bool BackgroundChangerCompatibility
-        {
-            get => backgroundChangerCompatibility;
-            set { backgroundChangerCompatibility = value; OnPropertyChanged(); }
         }
 
         // Read by themes as {PluginSettings Plugin=ImageRotater, Path=EnableCoverImage}
@@ -526,6 +511,11 @@ namespace ImageRotater
         //
         // The command parameter is the button, which is how the restart prompt
         // below finds the settings window.
+        public RelayCommand<object> ImportBackgroundChanger => new RelayCommand<object>(a =>
+        {
+            plugin?.ImportFromBackgroundChanger();
+        });
+
         public RelayCommand<object> ConvertGifs => new RelayCommand<object>(a =>
         {
             plugin?.ConvertGifsToMp4();

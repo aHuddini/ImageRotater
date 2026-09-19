@@ -137,15 +137,6 @@
                                    Text="Master switch. When off, ImageRotater does nothing and leaves your theme's own artwork handling untouched."/>
 
                         <Border Style="{StaticResource IrSectionBar}">
-                            <TextBlock Text="THEMES" Style="{StaticResource IrSectionTitle}"/>
-                        </Border>
-
-                        <CheckBox Style="{StaticResource IrToggle}" Content="Work with themes built for BackgroundChanger"
-                                  IsChecked="{Binding Settings.BackgroundChangerCompatibility}"/>
-                        <TextBlock Style="{StaticResource IrHint}"
-                                   Text="Answers to the background element BackgroundChanger themes already use, so such a theme needs no edits. BackgroundChanger must be disabled - the two cannot run together. Takes effect after restarting Playnite."/>
-
-                        <Border Style="{StaticResource IrSectionBar}">
                             <TextBlock Text="TROUBLESHOOTING" Style="{StaticResource IrSectionTitle}"/>
                         </Border>
 
@@ -235,7 +226,7 @@
                                 <TextBlock Text="TRANSITION" Style="{StaticResource IrSectionTitle}"/>
                             </Border>
                             <TextBlock Style="{StaticResource IrHintFlush}"
-                                       Text="How the background changes to the next still, in both Desktop and Fullscreen mode. A flash fills the whole screen here, so crossfade is the safe choice."/>
+                                       Text="How the background changes to the next still, in both Desktop and Fullscreen mode. A flash fills the whole screen here, so crossfade is the safe choice. A game needs two or more backgrounds for any of this to happen - with one there is nothing to change to."/>
 
                             <RadioButton Style="{StaticResource IrRadio}" Content="Crossfade" GroupName="BackgroundTransition"
                                          IsChecked="{Binding Settings.BackgroundTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"/>
@@ -327,7 +318,7 @@
                                 <TextBlock Text="TRANSITION" Style="{StaticResource IrSectionTitle}"/>
                             </Border>
                             <TextBlock Style="{StaticResource IrHintFlush}"
-                                       Text="How a cover changes to the next still, in both Desktop and Fullscreen mode. Animated covers and videos keep their own fades."/>
+                                       Text="How a cover changes to the next still, in both Desktop and Fullscreen mode. Animated covers and videos keep their own fades. A game needs two or more covers for any of this to happen - with one there is nothing to change to."/>
 
                             <RadioButton Style="{StaticResource IrRadio}" Content="Crossfade" GroupName="CoverTransition"
                                          IsChecked="{Binding Settings.CoverTransition, Converter={StaticResource EnumRadio}, ConverterParameter=Crossfade}"/>
@@ -407,6 +398,37 @@
                                 <Button Style="{StaticResource IrButtonDanger}" Content="Delete all plugin artwork and restore originals"
                                         Command="{Binding ResetLibrary}"
                                         CommandParameter="{Binding RelativeSource={RelativeSource Self}}"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+                </TabItem>
+
+                <!-- Its own page, apart from maintenance: this is the first
+                     thing a user arriving from another plugin looks for, and
+                     it should not sit between "convert" and "delete". -->
+                <TabItem Header="Migration">
+                <ScrollViewer Style="{StaticResource IrPage}">
+                    <StackPanel MaxWidth="820" HorizontalAlignment="Stretch">
+
+                        <TextBlock Text="Migration" Style="{StaticResource IrPageTitle}"/>
+                        <TextBlock Style="{StaticResource IrPageSubtitle}"
+                                   Text="Bring artwork over from another plugin. Everything here copies; nothing is moved or deleted from the other plugin, and running an import again only adds what is new."/>
+
+                        <Border Style="{StaticResource IrSectionBar}">
+                            <TextBlock Text="BACKGROUNDCHANGER" Style="{StaticResource IrSectionTitle}"/>
+                        </Border>
+
+                        <Border Style="{StaticResource IrCard}">
+                            <StackPanel>
+                                <TextBlock Text="Import artwork from BackgroundChanger" Style="{StaticResource IrCardTitle}"/>
+                                <TextBlock Style="{StaticResource IrHintFlush}"
+                                           Text="Copies every cover and background you gave BackgroundChanger into ImageRotater, game by game, so switching plugins keeps years of curation. Each game's images land in its own rotation straight away. Disable BackgroundChanger afterwards - the two cannot run together."/>
+                                <TextBlock Style="{StaticResource IrHintFlush}"
+                                           Text="WebP files come across as they are. Playnite cannot show WebP, so run Library > Maintenance > Convert all GIFs to MP4 after importing to make them play (needs ffmpeg)."/>
+                                <Button Style="{StaticResource IrButton}" Content="Import artwork from BackgroundChanger"
+                                        Command="{Binding ImportBackgroundChanger}"/>
                             </StackPanel>
                         </Border>
 

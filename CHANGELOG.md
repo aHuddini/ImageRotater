@@ -3,6 +3,60 @@
 All notable changes to ImageRotater. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Library > Migration page: import the covers and backgrounds you gave BackgroundChanger. Copies only;
+  BackgroundChanger's own files are untouched, and running it again only adds what is new.
+- The search dialog remembers how you left it, separately for covers and backgrounds: source tab,
+  ticked shapes, sizes and styles, and the content toggles. Open it on the next game and your
+  filters are already set.
+- Aspect groups in the search dialog collapse; they start collapsed, show how many results they
+  hold, and the group tick still selects every size underneath.
+- A note wherever a game is left with a single image — after a download, after adding files, and
+  on the Animation pages: rotation and transitions need two or more.
+
+### Changed
+- Search result tiles show the whole image instead of cropping it to a banner. Cover searches get a
+  square box, background searches keep the wide one.
+- Every search filter applies as it is ticked; the Apply button is gone.
+- Search dialog footer: Close sits at the far right, Download selected beside it in the theme's
+  accent colour.
+- Covers rotate once the selection has settled (a quarter of a second), and a departing game's
+  background rotates only if the user had actually stopped on it. Scrolling quickly through the
+  library no longer queues a file copy, a database write and a tile decode for every game passed;
+  forty tiles scrolled produced one import where it used to produce forty.
+- Switching away from a game with a video background dissolves the video's last frame into the
+  next game's background, instead of cutting to the old game's still and then fading.
+- Closing Playnite commits every restored game in one database write and tries each replaced
+  file once, instead of one write per game and a 2.5 s retry per file still held by a tile.
+
+### Fixed
+- Playnite starting one to two seconds slower with the plugin enabled. The startup pass over the
+  library was reading every pair of same-length files in full to collapse duplicates - and a library
+  brought over from BackgroundChanger holds a preserved original beside an identical copy for most
+  games. It also republished every video a still had displaced and took a poster frame through
+  ffmpeg for each. Both ran on the UI thread before the first frame, every launch. The startup pass
+  no longer opens files, and the poster is only taken when the tile is still the placeholder. The
+  pass now logs its duration so a slow start can be checked at a glance. Reported by Mike Aniki.
+- Freezes when switching games, up to 2.6 seconds on a cover rotation. Removing the library copy a
+  rotation had just replaced ran on the UI thread, and the theme's tile still had that file open -
+  so Playnite retried the delete five times, half a second apart, and then failed anyway. The
+  removal now runs on a worker thread. Measured in Fullscreen with Aniki ReMake: 30 game switches,
+  none over 100 ms, where the same run had shown 2599, 151 and 122 ms.
+- Levelling a background to the game's common width - a full decode, resize and PNG encode, 100 to
+  300 ms on the UI thread - ran on every rotation and threw the result away. The levelled copy is
+  now kept beside the source and reused, so each picture is levelled once; the target width per
+  game is remembered too, instead of opening every candidate on every switch. Selection handling
+  over 100 ms is logged with a per-phase breakdown.
+- Search dialog: a group tick unticked itself after every search while its sizes stayed ticked;
+  switching source tabs dropped every tick.
+
+### Removed
+- The "Work with themes built for BackgroundChanger" setting. The plugin now always answers to
+  BackgroundChanger's element names; the two plugins could never run together, so the toggle only
+  ever added a restart to the setup.
+
 ## [1.0.0] - 2026-09-12
 
 First release built on Playnite 10.57.

@@ -34,9 +34,9 @@ controls a theme hosts by name:
    converters, no plugin-settings conditions. Video and GIF play through the
    hosted control; stills keep coming through Playnite.
 
-A theme built for BackgroundChanger is most of the way there: with "Work with
-themes built for BackgroundChanger" on, the plugin also answers to
-`BackgroundChanger_PluginCoverImage` and `BackgroundChanger_PluginBackgroundImage`.
+A theme built for BackgroundChanger is most of the way there: the plugin also
+answers to `BackgroundChanger_PluginCoverImage` and
+`BackgroundChanger_PluginBackgroundImage`.
 The elements resolve, but any *conditions* the theme wraps them in that check
 BackgroundChanger's own plugin status or settings stay false, so such a theme
 still needs an ImageRotater branch beside them - see
@@ -405,9 +405,8 @@ wants to control sizing or layering itself.
 
 ## Themes built for BackgroundChanger
 
-While the "BackgroundChanger compatibility" setting is on, ImageRotater also
-answers to `BackgroundChanger_PluginBackgroundImage` and
-`BackgroundChanger_PluginCoverImage`.
+ImageRotater also answers to `BackgroundChanger_PluginBackgroundImage` and
+`BackgroundChanger_PluginCoverImage`, always - there is nothing to switch on.
 
 The *elements* resolve, but the *conditions* around them do not: such a theme
 gates on `{PluginStatus Plugin=playnite-backgroundchanger-plugin}` and
