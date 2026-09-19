@@ -34,6 +34,15 @@ namespace ImageRotater.Services
 
         private static readonly string[] Empty = new string[0];
 
+        // Whether a file would be listed at all, by extension. For callers
+        // that copy files in from elsewhere and want to skip what would only
+        // sit invisibly on disk.
+        public static bool IsSupported(string path)
+        {
+            return !string.IsNullOrEmpty(path)
+                && SupportedExtensions.Contains(Path.GetExtension(path));
+        }
+
         private readonly string _imagesRoot;
 
         // Themes join this with a game's own id to reach that game's current
@@ -156,25 +165,9 @@ namespace ImageRotater.Services
         {
             try
             {
-                if (kind == ArtworkKind.Background)
+                string folder = CandidateFolderFor(gameId, kind);
+                if (folder == null)
                 {
-                    bool firstTime;
-                    lock (_listCacheLock)
-                    {
-                        firstTime = _migrationChecked.Add(gameId);
-                    }
-
-                    if (firstTime)
-                    {
-                        MigrateLegacyLayout(gameId);
-                    }
-                }
-
-                string folder = GetGameFolder(gameId, kind);
-                if (!Directory.Exists(folder))
-                {
-                    // Deliberately uncached: creating the folder later must be
-                    // seen immediately, and a missing-folder check is cheap.
                     return Empty;
                 }
 
@@ -190,12 +183,7 @@ namespace ImageRotater.Services
                     }
                 }
 
-                IReadOnlyList<string> listed = DeduplicateByContent(
-                    Directory.GetFiles(folder)
-                        .Where(f => SupportedExtensions.Contains(Path.GetExtension(f)))
-                        .Where(f => !IsPublishedCopy(f))
-                        .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                        .ToList());
+                IReadOnlyList<string> listed = DeduplicateByContent(ListCandidateFiles(folder));
 
                 listed = PreferChosenOverPreserved(listed);
 
@@ -211,6 +199,68 @@ namespace ImageRotater.Services
                 Logger.Warn(ex, $"ImageRotater: could not list images for game {gameId}");
                 return Empty;
             }
+        }
+
+        // The same files as GetImagePaths, duplicates included, and without
+        // opening any of them.
+        //
+        // For sweeps over the whole library. GetImagePaths reads every pair
+        // of same-length files in full to tell a duplicate from a coincidence,
+        // which is right for the one game being rotated and ruinous for all
+        // of them at once: a library migrated from BackgroundChanger holds a
+        // preserved original beside an identical copy for most games, and the
+        // startup seed was hashing the lot on the UI thread at every launch -
+        // seconds, for an answer it never used. The seed only asks whether a
+        // game has files, which comes first, and whether one is a video.
+        public IReadOnlyList<string> GetImagePathsRaw(Guid gameId, ArtworkKind kind)
+        {
+            try
+            {
+                string folder = CandidateFolderFor(gameId, kind);
+                if (folder == null)
+                {
+                    return Empty;
+                }
+
+                return ListCandidateFiles(folder);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, $"ImageRotater: could not list images for game {gameId}");
+                return Empty;
+            }
+        }
+
+        // The game's candidate folder, after the one-time legacy move, or null
+        // when it does not exist. Deliberately uncached: creating the folder
+        // later must be seen immediately, and a missing-folder check is cheap.
+        private string CandidateFolderFor(Guid gameId, ArtworkKind kind)
+        {
+            if (kind == ArtworkKind.Background)
+            {
+                bool firstTime;
+                lock (_listCacheLock)
+                {
+                    firstTime = _migrationChecked.Add(gameId);
+                }
+
+                if (firstTime)
+                {
+                    MigrateLegacyLayout(gameId);
+                }
+            }
+
+            string folder = GetGameFolder(gameId, kind);
+            return Directory.Exists(folder) ? folder : null;
+        }
+
+        private static List<string> ListCandidateFiles(string folder)
+        {
+            return Directory.GetFiles(folder)
+                .Where(f => SupportedExtensions.Contains(Path.GetExtension(f)))
+                .Where(f => !IsPublishedCopy(f))
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         // The fixed name a theme can path to without knowing which file the
@@ -296,6 +346,24 @@ namespace ImageRotater.Services
 
             return !string.IsNullOrEmpty(name)
                 && name.StartsWith(PreservedPrefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // How many images a game will rotate through: what its folder holds,
+        // plus its own Playnite art if that has not been preserved yet - the
+        // first rotation copies it in, and it joins the pool.
+        //
+        // Rotation needs two. Callers that just added a single image use this
+        // to tell the user so, rather than letting them conclude the plugin
+        // does nothing. A game with its own cover needs only one download; one
+        // with none needs two.
+        public int RotationPoolSize(Guid gameId, ArtworkKind kind, string ownArtId)
+        {
+            IReadOnlyList<string> held = GetImagePaths(gameId, kind);
+
+            bool ownStillToCome = !string.IsNullOrEmpty(ownArtId)
+                && !held.Any(IsPreservedOriginal);
+
+            return held.Count + (ownStillToCome ? 1 : 0);
         }
 
         // The published copy is not a candidate. It is a COPY of one, so
@@ -443,6 +511,20 @@ namespace ImageRotater.Services
             catch (Exception) { return 0; }
         }
 
+        // Whether a published tile is the placeholder this store writes, by
+        // length: no real artwork is 70 bytes.
+        private static bool IsPlaceholder(string path)
+        {
+            try
+            {
+                return new FileInfo(path).Length == TransparentPixelPng.Length;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         public bool EnsurePublishedPlaceholder(Guid gameId, ArtworkKind kind)
         {
             try
@@ -521,19 +603,30 @@ namespace ImageRotater.Services
                 {
                     RemovePublishedVideos(folder, keep: Path.GetFileName(target));
 
-                    // A poster frame for the .tile a theme binds.
+                    // A poster frame for the .tile a theme binds - but only
+                    // when that tile is still the 1x1 placeholder.
                     //
-                    // Publishing only the video left that file on its 1x1
-                    // transparent placeholder, which a theme stretches across
-                    // the tile and Playnite renders as SOLID BLACK - so a
-                    // downloaded video looked like broken artwork on every
-                    // theme whose tile is a plain Image rather than a
-                    // MediaElement.
+                    // Publishing only the video left that file on the
+                    // placeholder, which a theme stretches across the tile and
+                    // Playnite renders as SOLID BLACK - so a downloaded video
+                    // looked like broken artwork on every theme whose tile is
+                    // a plain Image rather than a MediaElement.
+                    //
+                    // A real still already there is left alone. Taking a
+                    // poster spawns ffmpeg and waits for it, half a second on
+                    // the UI thread - and the startup seed republishes every
+                    // video a still pick has displaced, so a library with a
+                    // handful of videos paid that on every launch, for a
+                    // poster no one could see under the video anyway.
                     //
                     // Needs ffmpeg. Without it the placeholder stays, which is
                     // the pre-existing behaviour rather than a new failure.
-                    GifConverter.ExtractPoster(
-                        sourcePath, Path.Combine(folder, PublishedFileName));
+                    string tile = Path.Combine(folder, PublishedFileName);
+
+                    if (!File.Exists(tile) || IsPlaceholder(tile))
+                    {
+                        GifConverter.ExtractPoster(sourcePath, tile);
+                    }
                 }
 
                 // Already current - skip the copy. Session mode republishes the

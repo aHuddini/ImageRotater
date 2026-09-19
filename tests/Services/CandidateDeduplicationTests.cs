@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using ImageRotater.Models;
 using ImageRotater.Services;
@@ -89,6 +90,32 @@ namespace ImageRotater.Tests.Services
             AddRaw("c.png", new byte[] { 3, 3, 3 });
 
             Assert.AreEqual(3, _store.GetImagePaths(_gameId, ArtworkKind.Background).Count);
+        }
+
+        // The startup seed walks the whole library and only needs to know
+        // whether a game has files and which comes first. Reading every
+        // same-length pair in full to collapse duplicates cost seconds on the
+        // UI thread at every launch on a library where most games hold a
+        // preserved original beside an identical copy of it - so the seed
+        // gets a listing that skips that step.
+        [Test]
+        public void RawListing_KeepsDuplicates_SameFilterAndOrderOtherwise()
+        {
+            byte[] picture = { 1, 2, 3, 4, 5, 6, 7, 8 };
+            AddRaw("original_preserved.png", picture);
+            AddRaw("sgdb_12345.png", picture);
+            AddRaw("current.tile", picture);   // published copy, never a candidate
+            AddRaw("notes.txt", picture);      // unsupported, never a candidate
+
+            var raw = _store.GetImagePathsRaw(_gameId, ArtworkKind.Background);
+
+            CollectionAssert.AreEqual(
+                new[] { "original_preserved.png", "sgdb_12345.png" },
+                raw.Select(Path.GetFileName).ToArray(),
+                "both names, sorted; published copy and unsupported file excluded");
+
+            Assert.AreEqual(1, _store.GetImagePaths(_gameId, ArtworkKind.Background).Count,
+                "the exact listing still collapses the pair");
         }
     }
 }

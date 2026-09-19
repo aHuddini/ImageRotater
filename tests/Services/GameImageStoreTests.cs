@@ -173,5 +173,20 @@ namespace ImageRotater.Tests.Services
             Assert.AreEqual(1, _store.GetImagePaths(_gameId, ArtworkKind.Background).Count);
             Assert.AreEqual(0, _store.GetImagePaths(other, ArtworkKind.Background).Count);
         }
+
+        // One download plus the game's own art is a pool of two; the original
+        // stops counting extra once it has been preserved into the folder.
+        [Test]
+        public void RotationPoolSize_CountsOwnArtUntilPreserved()
+        {
+            _store.AddImage(_gameId, MakeSourceFile("art.jpg"), ArtworkKind.Background);
+
+            Assert.AreEqual(1, _store.RotationPoolSize(_gameId, ArtworkKind.Background, null));
+            Assert.AreEqual(2, _store.RotationPoolSize(_gameId, ArtworkKind.Background, "lib/own.jpg"));
+
+            _store.AddImage(_gameId, MakeSourceFile("original_own.jpg"), ArtworkKind.Background);
+
+            Assert.AreEqual(2, _store.RotationPoolSize(_gameId, ArtworkKind.Background, "lib/own.jpg"));
+        }
     }
 }

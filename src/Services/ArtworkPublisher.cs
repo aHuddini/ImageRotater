@@ -91,7 +91,11 @@ namespace ImageRotater.Services
                 {
                     try
                     {
-                        IReadOnlyList<string> candidates = _store.GetImagePaths(game.Id, kind);
+                        // Raw, not deduplicated: this runs for every game on
+                        // the UI thread before the first frame, and the exact
+                        // listing reads same-length files in full. See the
+                        // store for what that cost on a migrated library.
+                        IReadOnlyList<string> candidates = _store.GetImagePathsRaw(game.Id, kind);
 
                         // Seed a video separately from the still, because they
                         // publish to different files and a theme's MediaElement

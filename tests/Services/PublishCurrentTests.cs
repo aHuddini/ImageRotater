@@ -228,6 +228,73 @@ namespace ImageRotater.Tests.Services
                 "seeding a 300-game library must not cost meaningful disk");
         }
 
+        // A video pick over a real still keeps that still as the tile. The
+        // poster frame exists only to replace the 1x1 placeholder, and taking
+        // one spawns ffmpeg - which the startup seed used to do for every game
+        // whose video had been displaced by a still, at ~0.5s each.
+        [Test]
+        public void Publish_Video_KeepsAnExistingStillInsteadOfTakingAPoster()
+        {
+            // A real clip, so that if ffmpeg IS consulted it succeeds and the
+            // tile visibly changes. Fake bytes would make ffmpeg fail and the
+            // test pass for the wrong reason.
+            string clip = MakeRealClip("clip.mp4");
+            Assume.That(clip, Is.Not.Null, "needs ffmpeg to build the fixture");
+
+            _store.PublishCurrent(_gameId, MakeFile("still.png", new byte[] { 4, 4, 4, 4 }), ArtworkKind.Cover);
+            _store.PublishCurrent(_gameId, clip, ArtworkKind.Cover);
+
+            CollectionAssert.AreEqual(
+                new byte[] { 4, 4, 4, 4 }, File.ReadAllBytes(PublishedPath(ArtworkKind.Cover)),
+                "the still a theme already shows must survive a video publish");
+            Assert.IsTrue(File.Exists(Path.Combine(
+                _store.GetPublishedFolder(_gameId, ArtworkKind.Cover), "current.mp4")));
+        }
+
+        // The poster still replaces the placeholder: that is the case it exists
+        // for, where a plain-Image theme would otherwise render solid black.
+        [Test]
+        public void Publish_Video_ReplacesThePlaceholderWithAPoster()
+        {
+            string clip = MakeRealClip("clip.mp4");
+            Assume.That(clip, Is.Not.Null, "needs ffmpeg to build the fixture");
+
+            _store.EnsurePublishedPlaceholder(_gameId, ArtworkKind.Cover);
+            long placeholderSize = new FileInfo(PublishedPath(ArtworkKind.Cover)).Length;
+
+            _store.PublishCurrent(_gameId, clip, ArtworkKind.Cover);
+
+            Assert.Greater(new FileInfo(PublishedPath(ArtworkKind.Cover)).Length, placeholderSize);
+        }
+
+        // Two seconds of solid colour, or null without ffmpeg.
+        private string MakeRealClip(string name)
+        {
+            string ffmpeg = GifConverter.FindFfmpeg();
+            if (ffmpeg == null)
+            {
+                return null;
+            }
+
+            string path = Path.Combine(_root, name);
+            var start = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = ffmpeg,
+                Arguments = $"-y -f lavfi -i color=c=red:s=16x16:d=2 -pix_fmt yuv420p \"{path}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true
+            };
+
+            using (var process = System.Diagnostics.Process.Start(start))
+            {
+                process.StandardError.ReadToEnd();
+                process.WaitForExit();
+            }
+
+            return File.Exists(path) ? path : null;
+        }
+
         [Test]
         public void Publish_MissingSource_FailsQuietly()
         {

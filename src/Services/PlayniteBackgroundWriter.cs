@@ -238,15 +238,14 @@ namespace ImageRotater.Services
                 //
                 // Only the imported copy is resized; the candidate on disk
                 // keeps its original resolution.
+                // The levelled copy is cached beside the source and reused by
+                // the next rotation onto the same picture - see
+                // NormaliseIfBackground. Not a candidate: it lives in a folder
+                // the listing skips.
                 string toImport = NormaliseIfBackground(game, kind, imagePath);
 
                 string newId = ImportFile(toImport, game.Id);
 
-                // The normalised copy is a temp file, not a candidate.
-                if (!string.Equals(toImport, imagePath, StringComparison.OrdinalIgnoreCase))
-                {
-                    try { File.Delete(toImport); } catch (Exception) { }
-                }
                 if (string.IsNullOrEmpty(newId))
                 {
                     return false;
@@ -293,7 +292,7 @@ namespace ImageRotater.Services
                     }
 
                     SetCurrent(game, kind, newId);
-                    _api.Database.Games.Update(game);
+                    CommitGame(game);
                 });
 
                 if (!committed)
@@ -360,29 +359,101 @@ namespace ImageRotater.Services
                     return imagePath;
                 }
 
-                // Keyed on the WIDEST candidate rather than on the current
-                // pick, so every rotation for this game lands on the same
-                // number - which is the entire point.
-                int target = BackgroundNormaliser.TargetWidthFor(
-                    Directory.GetFiles(folder),
-                    ScreenWidth == null ? 0 : ScreenWidth());
+                int target = TargetWidthFor(folder);
 
                 if (target <= 0)
                 {
                     return imagePath;
                 }
 
-                string temp = Path.Combine(
-                    Path.GetTempPath(),
-                    "ir_bg_" + Guid.NewGuid().ToString("N") + ".png");
+                // The levelled copy is KEPT, beside the source, and reused.
+                //
+                // It used to be a temp file deleted after import, so every
+                // rotation onto a picture whose width differed from the target
+                // paid the full decode, bicubic resize and PNG encode again -
+                // 100 to 300 ms on the UI thread for a 1080p or 4K source,
+                // which is the "brief freeze" on switching games. The same
+                // picture at the same width is the same bytes; encode it once.
+                //
+                // In the letterboxer's cache folder, so every place that
+                // already knows to skip that folder - the listing, the bulk
+                // conversions, the optimiser - skips this too. A source that
+                // is itself letterboxed already lives there.
+                string dir = Path.GetDirectoryName(imagePath);
+                string cacheDir = string.Equals(
+                        Path.GetFileName(dir), Letterboxer.CacheFolderName,
+                        StringComparison.OrdinalIgnoreCase)
+                    ? dir
+                    : Path.Combine(dir, Letterboxer.CacheFolderName);
 
-                return BackgroundNormaliser.NormaliseTo(imagePath, target, temp);
+                string cached = Path.Combine(
+                    cacheDir,
+                    Path.GetFileNameWithoutExtension(imagePath) + ".w" + target + ".png");
+
+                // Rebuilt when the source is newer - downloads overwrite files
+                // under the same name, and a stale copy would resurrect the
+                // old artwork.
+                if (File.Exists(cached) &&
+                    File.GetLastWriteTimeUtc(cached) >= File.GetLastWriteTimeUtc(imagePath))
+                {
+                    return cached;
+                }
+
+                Directory.CreateDirectory(cacheDir);
+
+                // Written beside, then moved: an interrupted encode must not
+                // leave a half-written PNG that passes the freshness check
+                // above forever after.
+                string temp = cached + ".tmp";
+                string written = BackgroundNormaliser.NormaliseTo(imagePath, target, temp);
+
+                if (!string.Equals(written, temp, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Nothing needed doing, or it could not be done.
+                    return imagePath;
+                }
+
+                if (File.Exists(cached))
+                {
+                    File.Delete(cached);
+                }
+
+                File.Move(temp, cached);
+                return cached;
             }
             catch (Exception ex)
             {
                 Logger.Warn(ex, "ImageRotater: could not normalise the background");
                 return imagePath;
             }
+        }
+
+        // The target width per game folder, remembered until the folder
+        // changes. Measuring it opens every candidate to read its width, and
+        // doing that on every rotation was one file open per image per game
+        // switch - for an answer that only changes when a file is added.
+        private readonly Dictionary<string, Tuple<DateTime, int>> _targetWidths =
+            new Dictionary<string, Tuple<DateTime, int>>(StringComparer.OrdinalIgnoreCase);
+
+        private int TargetWidthFor(string folder)
+        {
+            DateTime stamp = Directory.GetLastWriteTimeUtc(folder);
+
+            Tuple<DateTime, int> hit;
+            if (_targetWidths.TryGetValue(folder, out hit) && hit.Item1 == stamp)
+            {
+                return hit.Item2;
+            }
+
+            // Keyed on the WIDEST candidate rather than on the current pick,
+            // so every rotation for this game lands on the same number -
+            // which is the entire point.
+            int target = BackgroundNormaliser.TargetWidthFor(
+                Directory.GetFiles(folder),
+                ScreenWidth == null ? 0 : ScreenWidth());
+
+            _targetWidths[folder] = Tuple.Create(stamp, target);
+            return target;
         }
 
         public bool HasWrittenArtwork
@@ -446,7 +517,7 @@ namespace ImageRotater.Services
 
                 Game target = game;
 
-                InvokeOnUi(() => _api.Database.Games.Update(target));
+                InvokeOnUi(() => CommitGame(target));
             }
 
             if (cleared > 0)
@@ -461,6 +532,15 @@ namespace ImageRotater.Services
         {
             int restored = 0;
 
+            // Gathered first, committed once. This runs when Playnite closes,
+            // for every game the plugin rotated in every session so far. One
+            // Games.Update per game was one database write and one change
+            // notification apiece - and the theme is still on screen to
+            // service every notification - so a well-used library made
+            // closing Fullscreen noticeably slow. A bulk update is one write.
+            var touched = new List<Game>();
+            var toDelete = new List<string>();
+
             foreach (KeyValuePair<string, string> entry in _originals.ToList())
             {
                 Guid gameId;
@@ -471,7 +551,7 @@ namespace ImageRotater.Services
 
                 try
                 {
-                    Game game = _api.Database.Games.Get(gameId);
+                    Game game = LookupGame(gameId);
                     if (game == null)
                     {
                         // Game was removed from the library; nothing to restore.
@@ -506,12 +586,12 @@ namespace ImageRotater.Services
                     // restore that does not notify leaves the grid showing
                     // plugin artwork that is no longer in the database.
                     string finalValue = restoreTo;
+                    InvokeOnUi(() => SetCurrent(game, kind, finalValue));
 
-                    InvokeOnUi(() =>
+                    if (!touched.Contains(game))
                     {
-                        SetCurrent(game, kind, finalValue);
-                        _api.Database.Games.Update(game);
-                    });
+                        touched.Add(game);
+                    }
 
                     // Restore is the one place plugin-written files are cleaned
                     // up, since rotation deliberately leaves them behind. Only
@@ -521,7 +601,7 @@ namespace ImageRotater.Services
                         !string.Equals(current, entry.Value, StringComparison.OrdinalIgnoreCase) &&
                         IsSafeToDelete(game, kind, current))
                     {
-                        _api.Database.RemoveFile(current);
+                        toDelete.Add(current);
                     }
 
                     restored++;
@@ -530,6 +610,28 @@ namespace ImageRotater.Services
                 {
                     Logger.Warn(ex, $"ImageRotater: could not restore artwork for {entry.Key}");
                 }
+            }
+
+            if (touched.Count > 0)
+            {
+                try
+                {
+                    InvokeOnUi(() => CommitGames(touched));
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(ex, "ImageRotater: could not commit restored artwork");
+                }
+            }
+
+            // One attempt each, no retry. Playnite's RemoveFile retries a
+            // locked file five times half a second apart, and at shutdown
+            // every cover still on a visible tile IS locked - that was
+            // seconds added to closing Fullscreen, and the file stayed behind
+            // regardless. A leftover costs disk, not correctness.
+            foreach (string id in toDelete)
+            {
+                TryDeleteLibraryFileOnce(id);
             }
 
             _originals.Clear();
@@ -544,6 +646,41 @@ namespace ImageRotater.Services
             return restored;
         }
 
+        // The database calls restore makes, as seams so the flow above can be
+        // tested without Playnite. Nothing in the plugin overrides them.
+        protected virtual Game LookupGame(Guid id)
+        {
+            return _api.Database.Games.Get(id);
+        }
+
+        protected virtual void CommitGame(Game game)
+        {
+            _api.Database.Games.Update(game);
+        }
+
+        protected virtual void CommitGames(IEnumerable<Game> games)
+        {
+            _api.Database.Games.Update(games);
+        }
+
+        protected virtual bool TryDeleteLibraryFileOnce(string id)
+        {
+            try
+            {
+                string path = _api.Database.GetFullFilePath(id);
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         // Removes the copy a rotation just replaced, keeping the store bounded
         // now that every rotation imports afresh.
         //
@@ -555,6 +692,15 @@ namespace ImageRotater.Services
         //
         // Still called only after Games.Update has committed the new id, so the
         // file being removed is no longer referenced.
+        //
+        // The removal itself runs on a worker thread. The theme's tile still
+        // has the previous file open - a WPF bitmap not loaded with OnLoad
+        // keeps its handle - so the delete finds it locked, and Playnite's
+        // RemoveFile retries five times half a second apart before giving up.
+        // On the UI thread that was a 2.6 s freeze on every cover rotation,
+        // measured in Fullscreen, for a delete that then failed anyway. Off
+        // the UI thread the retries cost nothing, and by the time they run
+        // the tile has usually let go.
         private void DeleteReplacedCopy(Game game, ArtworkKind kind, string previousId)
         {
             if (string.IsNullOrEmpty(previousId))
@@ -562,24 +708,36 @@ namespace ImageRotater.Services
                 return;
             }
 
-            try
+            // Decided here, on the caller's thread, against the game as it is
+            // now. Never the user's own artwork: IsSafeToDelete refuses
+            // anything recorded as an original for either kind, or still used
+            // by the game's other artwork slots.
+            if (!IsSafeToDelete(game, kind, previousId))
             {
-                // Never the user's own artwork. IsSafeToDelete refuses anything
-                // recorded as an original for either kind, or still used by the
-                // game's other artwork slots.
-                if (!IsSafeToDelete(game, kind, previousId))
-                {
-                    return;
-                }
+                return;
+            }
 
-                _api.Database.RemoveFile(previousId);
-            }
-            catch (Exception ex)
+            string name = game.Name;
+
+            System.Threading.Tasks.Task.Run(() =>
             {
-                // A failed delete costs one leftover file, which RestoreAll
-                // clears. Not worth failing the rotation over.
-                Logger.Warn(ex, $"ImageRotater: could not remove the replaced {kind} copy for \"{game.Name}\"");
-            }
+                try
+                {
+                    RemoveLibraryFile(previousId);
+                }
+                catch (Exception ex)
+                {
+                    // A failed delete costs one leftover file, which RestoreAll
+                    // clears. Not worth failing the rotation over.
+                    Logger.Warn(ex, $"ImageRotater: could not remove the replaced {kind} copy for \"{name}\"");
+                }
+            });
+        }
+
+        // Virtual as a test seam: the real call is Playnite's, retries and all.
+        protected virtual void RemoveLibraryFile(string id)
+        {
+            _api.Database.RemoveFile(id);
         }
 
         // Runs the action on Playnite's UI thread, synchronously.

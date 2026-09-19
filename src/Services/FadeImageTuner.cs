@@ -100,7 +100,18 @@ namespace ImageRotater.Services
                     return 0;
                 }
 
-                return Patch(window);
+                // A full visual-tree walk. Cheap on the default theme; a
+                // heavy theme can make it not so, and the log should say.
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                int patched = Patch(window);
+                timer.Stop();
+
+                if (timer.ElapsedMilliseconds > 50)
+                {
+                    Logger.Info($"ImageRotater: fade retime walked the window in {timer.ElapsedMilliseconds} ms");
+                }
+
+                return patched;
             }
             catch (Exception ex)
             {
